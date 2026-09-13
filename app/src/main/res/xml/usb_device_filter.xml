@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Espressif (0x303A): firmware OpenIris de ETVR y Babble -->
+    <usb-device vendor-id="12346" />
+    <!-- Cualquier camara USB (clase video) -->
+    <usb-device class="14" />
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Horizon OS exige este permiso (no CAMERA) para dar acceso USB a camaras de clase video (UVC) -->
+    <uses-permission android:name="horizonos.permission.USB_CAMERA" />
+</manifest>

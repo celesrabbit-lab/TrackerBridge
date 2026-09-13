@@ -8,8 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <!-- Horizon OS exige este permiso (no CAMERA) para dar acceso USB a camaras de clase video (UVC) -->
-    <uses-permission android:name="horizonos.permission.USB_CAMERA" />
+    <!-- El permiso de camara de cada visor esta en src/quest/ y src/pico/ -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />

@@ -19,6 +19,18 @@ Cámaras (USB) → hub → Meta Quest (Tracker Bridge) → WiFi → PC (ETVR / B
 - Hub USB-C OTG (probado con un hub genérico de 4 puertos).
 - Quest y PC en la misma red.
 
+## Visores Pico (experimental)
+
+Hay una APK aparte para visores Pico, `TrackerBridge-Pico-x.y.z.apk`, en la página de Releases.
+Todavía no se ha probado en un Pico real, así que los reportes son muy bienvenidos: abre un issue con
+el modelo de tu visor y lo que pasó.
+
+Diferencias con la versión de Quest:
+- Pide el permiso de **cámara** normal de Android en vez del permiso de cámaras USB de Horizon OS.
+  Android lo exige antes de que cualquier app lea una cámara USB; la app nunca usa las cámaras del visor.
+- Se instala como una app separada (`dev.rabbit.trackerbridge.pico`), así que no choca con la versión de Quest.
+- El botón de idioma necesita Android 13 o más nuevo. En sistemas anteriores, la app usa el idioma del visor.
+
 ## Instalar la APK
 
 Descarga la APK desde [Releases](../../releases) e instálala con SideQuest, o con adb teniendo el Quest
@@ -100,11 +112,13 @@ Requisitos: JDK 17 o más nuevo y Android SDK (plataforma 35 y build-tools 35.0.
 SDK con `ANDROID_HOME` o con un archivo `local.properties` que contenga `sdk.dir=ruta/al/Android/Sdk`.
 
 ```
-gradlew.bat testDebugUnitTest assembleRelease
+gradlew.bat testQuestDebugUnitTest assembleRelease
 ```
 
-La APK queda en `app/build/outputs/apk/release/app-release.apk`. Está firmada con la clave de
-depuración, que sirve para instalarla por adb o SideQuest.
+Esto genera las dos APK: `app/build/outputs/apk/quest/release/app-quest-release.apk` y
+`app/build/outputs/apk/pico/release/app-pico-release.apk`. Quedan firmadas con la clave de depuración,
+que sirve para instalarlas por adb o SideQuest. El código es común; el permiso y el manifiesto de cada
+visor están en `app/src/quest/` y `app/src/pico/`.
 
 ## Cómo funciona
 

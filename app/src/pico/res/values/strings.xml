@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Solo los textos que cambian respecto a la version de Quest -->
+    <string name="app_name">Tracker Bridge (Pico)</string>
+    <string name="subtitle">USB cameras on the headset → ETVR and Project Babble on your PC</string>
+    <string name="quest_ip">Headset IP: %1$s</string>
+    <string name="no_wifi">The headset is not connected to WiFi</string>
+    <string name="quest_ip_placeholder">HEADSET-IP</string>
+    <string name="empty_running">Plug the cameras into the headset\'s hub. If a USB permission prompt appears, accept it (tick \"use by default\" so it doesn\'t ask again).</string>
+    <string name="msg_need_usb_camera_permission">Without the camera permission, Android won\'t let the app read USB cameras. The app never uses the headset\'s own cameras. Allow it to continue.</string>
+    <string name="msg_missing_permission_open_app">Camera permission missing: open Tracker Bridge and allow it.</string>
+    <string name="msg_usb_denied_no_prompt">The headset rejected the USB permission for %1$s without showing a prompt (%2$d ms).</string>
+</resources>

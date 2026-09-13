@@ -40,6 +40,18 @@ Other OpenIris-based UVC cameras should work, but they haven't been tested.
 - A USB-C OTG hub if you use more than one camera.
 - The Quest and the PC on the same network (5 GHz or 6 GHz WiFi recommended).
 
+## Pico headsets (experimental)
+
+There's a separate APK for Pico headsets, `TrackerBridge-Pico-x.y.z.apk`, on the Releases page. It
+hasn't been tested on a real Pico yet, so reports are very welcome: please open an issue with your
+headset model and what happened.
+
+Differences from the Quest version:
+- It asks for Android's regular **camera** permission instead of Horizon OS's USB cameras permission.
+  Android requires it before any app can read a USB camera; the app never uses the headset's own cameras.
+- It installs as a separate app (`dev.rabbit.trackerbridge.pico`), so it never conflicts with the Quest version.
+- The Language button needs Android 13 or newer. On older systems, the app follows the headset's language.
+
 ## Install
 
 Download the APK from the [Releases](../../releases) page and install it with SideQuest, or with adb
@@ -122,11 +134,14 @@ Requirements: JDK 17 or newer and the Android SDK (platform 35, build-tools 35.0
 your SDK with `ANDROID_HOME` or a `local.properties` file containing `sdk.dir=/path/to/Android/Sdk`.
 
 ```
-./gradlew testDebugUnitTest assembleRelease
+./gradlew testQuestDebugUnitTest assembleRelease
 ```
 
-On Windows, use `gradlew.bat`. The APK ends up in `app/build/outputs/apk/release/app-release.apk`,
-signed with the debug key, which is fine for sideloading.
+On Windows, use `gradlew.bat`. This builds both APKs:
+`app/build/outputs/apk/quest/release/app-quest-release.apk` and
+`app/build/outputs/apk/pico/release/app-pico-release.apk`. They're signed with the debug key, which is
+fine for sideloading. The code is shared; each headset's permission and manifest live in
+`app/src/quest/` and `app/src/pico/`.
 
 ## How it works
 

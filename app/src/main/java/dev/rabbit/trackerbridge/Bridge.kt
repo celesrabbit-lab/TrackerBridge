@@ -7,9 +7,6 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.concurrent.ConcurrentHashMap
 
-/** Permiso de Horizon OS que UsbUserPermissionManager revisa antes de dar acceso a camaras USB. */
-const val USB_CAMERA_PERMISSION = "horizonos.permission.USB_CAMERA"
-
 fun UsbDevice.isVideoDevice(): Boolean =
     (0 until interfaceCount).any { getInterface(it).interfaceClass == UsbConstants.USB_CLASS_VIDEO }
 

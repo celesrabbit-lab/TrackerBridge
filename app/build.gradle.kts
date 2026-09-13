@@ -23,8 +23,23 @@ android {
         applicationId = "dev.rabbit.trackerbridge"
         minSdk = 29
         targetSdk = 34
-        versionCode = 9
-        versionName = "0.7.0"
+    }
+
+    // Una APK por visor. El codigo es comun; el permiso y el manifiesto de cada visor van en src/<visor>/
+    flavorDimensions += "headset"
+    productFlavors {
+        create("quest") {
+            dimension = "headset"
+            versionCode = 9
+            versionName = "0.7.0"
+        }
+        create("pico") {
+            dimension = "headset"
+            // App separada (dev.rabbit.trackerbridge.pico): se instala junto a la de Quest sin conflictos
+            applicationIdSuffix = ".pico"
+            versionCode = 1
+            versionName = "0.1.0"
+        }
     }
 
     signingConfigs {

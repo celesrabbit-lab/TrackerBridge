@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Solo los textos que cambian respecto a la version de Quest -->
+    <string name="subtitle">Cámaras USB del visor → ETVR y Project Babble en la PC</string>
+    <string name="quest_ip">IP del visor: %1$s</string>
+    <string name="no_wifi">El visor no está conectado a WiFi</string>
+    <string name="quest_ip_placeholder">IP-del-visor</string>
+    <string name="empty_running">Conecta las cámaras al hub del visor. Si aparece un aviso de permiso USB, acéptalo (marca \"usar siempre\" para que no vuelva a preguntar).</string>
+    <string name="msg_need_usb_camera_permission">Sin el permiso de cámara, Android no deja que la app lea cámaras USB. La app nunca usa las cámaras del visor. Acéptalo para continuar.</string>
+    <string name="msg_missing_permission_open_app">Falta el permiso de cámara: abre Tracker Bridge y acéptalo.</string>
+    <string name="msg_usb_denied_no_prompt">El visor rechazó el permiso USB de %1$s sin mostrar aviso (%2$d ms).</string>
+</resources>

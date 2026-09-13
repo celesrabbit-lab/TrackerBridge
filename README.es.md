@@ -114,6 +114,10 @@ depuración, que sirve para instalarla por adb o SideQuest.
   cámaras conectadas. Los paquetes van marcados con prioridad de voz (WMM).
 - `UsbAttachActivity` (sin interfaz) recibe el aviso de "USB conectado" para reconectar sin mostrar ventanas.
 
+## Licencia
+
+[MIT](LICENSE): puedes usar, modificar y compartir este proyecto, siempre que mantengas el aviso de copyright.
+
 ## Créditos
 
 Creado por **LoadingRabbit** ([@celesrabbit-lab](https://github.com/celesrabbit-lab)) con la ayuda de

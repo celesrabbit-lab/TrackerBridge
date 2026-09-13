@@ -141,6 +141,10 @@ signed with the debug key, which is fine for sideloading.
   are held only while a camera is connected.
 - **Reconnect:** `UsbAttachActivity` has no UI. It receives the USB attach event and wakes the service.
 
+## License
+
+[MIT](LICENSE): you can use, modify and share this project, as long as you keep the copyright notice.
+
 ## Credits
 
 Created by **LoadingRabbit** ([@celesrabbit-lab](https://github.com/celesrabbit-lab)) with the help of

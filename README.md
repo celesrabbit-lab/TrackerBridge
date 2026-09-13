@@ -49,9 +49,6 @@ while the Quest is connected to the PC by cable:
 adb install -r TrackerBridge-0.7.0.apk
 ```
 
-If you installed v0.6.0, uninstall it first. Starting with v0.7.0, releases are signed with a new key,
-so the APK can't be installed over v0.6.0. Future updates will install over v0.7.0 normally.
-
 Optional: precompile the app so it uses less CPU:
 
 ```

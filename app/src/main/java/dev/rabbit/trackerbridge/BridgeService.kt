@@ -98,14 +98,14 @@ class BridgeService : Service() {
     private fun startInForeground() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Puente de camaras", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL_ID, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW)
         )
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Tracker Bridge activo")
-            .setContentText("Reenviando las camaras USB a la PC")
+            .setContentTitle(getString(R.string.notif_title))
+            .setContentText(getString(R.string.notif_text))
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentIntent(open)
             .setOngoing(true)
@@ -137,7 +137,7 @@ class BridgeService : Service() {
                     wifiLocks += it
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "WifiLock $mode no disponible", e)
+                Log.w(TAG, "WifiLock $mode not available", e)
             }
         }
     }
@@ -171,15 +171,15 @@ class BridgeService : Service() {
         val label = device.productName ?: device.deviceName
         if (granted) {
             Bridge.message = null
-            Log.i(TAG, "Permiso USB concedido para $label")
+            Log.i(TAG, "USB permission granted for $label")
         } else {
             Bridge.deniedDevices += device.deviceName
             Bridge.message = if (elapsed < 1500) {
-                "El Quest rechazo el permiso USB de $label sin mostrar aviso ($elapsed ms)"
+                UiMessage(R.string.msg_usb_denied_no_prompt, label, elapsed)
             } else {
-                "Permiso USB denegado para $label"
+                UiMessage(R.string.msg_usb_denied, label)
             }
-            Log.w(TAG, "Permiso USB denegado para $label tras $elapsed ms")
+            Log.w(TAG, "USB permission denied for $label after $elapsed ms")
         }
         scanDevices()
     }
@@ -190,26 +190,27 @@ class BridgeService : Service() {
 
         if (!usbManager.hasPermission(device)) {
             if (checkSelfPermission(USB_CAMERA_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
-                Bridge.message = "Falta el permiso de camaras USB: abre Tracker Bridge y aceptalo"
+                Bridge.message = UiMessage(R.string.msg_missing_permission_open_app)
             }
             // El permiso USB lo pide la pantalla de la app (en primer plano), no el servicio
             return
         }
 
+        val label = device.productName ?: device.deviceName
         val raw = try {
-            val conn = usbManager.openDevice(device) ?: throw IOException("openDevice devolvio null")
+            val conn = usbManager.openDevice(device) ?: throw IOException("openDevice returned null")
             try {
                 conn.rawDescriptors
             } finally {
                 conn.close()
             }
         } catch (e: Exception) {
-            Bridge.message = "No se pudo abrir ${device.productName ?: device.deviceName}: ${e.message}"
+            Bridge.message = UiMessage(R.string.msg_open_failed, label, e.message ?: e.javaClass.simpleName)
             return
         }
         val info = UvcDescriptors.parse(raw)
         if (info == null) {
-            Bridge.message = "${device.productName ?: device.deviceName} no es una camara MJPEG compatible"
+            Bridge.message = UiMessage(R.string.msg_not_mjpeg, label)
             return
         }
 
@@ -218,7 +219,8 @@ class BridgeService : Service() {
         } catch (_: SecurityException) {
             null
         }
-        val name = device.productName?.trim().takeUnless { it.isNullOrEmpty() } ?: "Camara ${device.deviceId}"
+        val name = device.productName?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: getString(R.string.camera_default_name, device.deviceId)
         val baseKey = if (!serial.isNullOrBlank() && serial != DEFAULT_SERIAL) "sn:$serial" else "name:$name"
         detachMissing()
         val slot = Bridge.slotFor(this, baseKey, name)
@@ -226,9 +228,10 @@ class BridgeService : Service() {
         if (!slot.server.isRunning) {
             try {
                 slot.server.start()
-                slot.serverError = null
+                slot.serverFailed = false
             } catch (e: IOException) {
-                slot.serverError = "No se pudo abrir el puerto ${slot.port}: ${e.message}"
+                slot.serverFailed = true
+                Log.w(TAG, "Could not open port ${slot.port}", e)
             }
         }
 
@@ -236,7 +239,7 @@ class BridgeService : Service() {
         slot.attach(device.deviceName, camera)
         camera.start()
         updateLocks()
-        Log.i(TAG, "Camara '$name' ($baseKey) en puerto ${slot.port}")
+        Log.i(TAG, "Camera '$name' ($baseKey) on port ${slot.port}")
     }
 
     private fun onDetached(device: UsbDevice) {
@@ -258,9 +261,9 @@ class BridgeService : Service() {
         private const val TAG = "BridgeService"
         private const val CHANNEL_ID = "bridge"
         private const val NOTIFICATION_ID = 1
-        const val ACTION_USB_PERMISSION = "dev.rabbit.trackerbridge.USB_PERMISSION"
         /** Serial por defecto del firmware cuando no puede leer la MAC: no sirve para distinguir camaras. */
         private const val DEFAULT_SERIAL = "12345678"
+        const val ACTION_USB_PERMISSION = "dev.rabbit.trackerbridge.USB_PERMISSION"
         const val ACTION_START = "dev.rabbit.trackerbridge.START"
         const val ACTION_SCAN = "dev.rabbit.trackerbridge.SCAN"
     }

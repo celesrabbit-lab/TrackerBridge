@@ -46,8 +46,11 @@ Download the APK from the [Releases](../../releases) page and install it with Si
 while the Quest is connected to the PC by cable:
 
 ```
-adb install -r TrackerBridge-0.6.0.apk
+adb install -r TrackerBridge-0.7.0.apk
 ```
+
+If you installed v0.6.0, uninstall it first. Starting with v0.7.0, releases are signed with a new key,
+so the APK can't be installed over v0.6.0. Future updates will install over v0.7.0 normally.
 
 Optional: precompile the app so it uses less CPU:
 
@@ -57,7 +60,8 @@ adb shell cmd package compile -m speed -f dev.rabbit.trackerbridge
 
 ## First-time setup
 
-The app's interface is currently in Spanish.
+The app is available in English and Spanish. It follows the Quest's language, and you can switch it
+with the **Language** button.
 
 1. On the Quest, open **Library → Unknown Sources → Tracker Bridge**.
 2. Allow the **USB cameras** permission. Horizon OS requires it before any app can read a USB camera.
@@ -88,7 +92,7 @@ and you don't need to open it.
 
 | Problem | What to do |
 |---|---|
-| A camera doesn't show up | Open Tracker Bridge and tap **Buscar camaras** (scan for cameras). Check the cable and the hub. |
+| A camera doesn't show up | Open Tracker Bridge and tap **Scan for cameras**. Check the cable and the hub. |
 | The app says the Quest rejected the USB permission without a prompt | The USB cameras permission is missing. Grant it in the app's permissions, or reinstall the app and allow it. |
 | No image in ETVR or Babble | Check the Quest's IP (shown in the app) and that both devices are on the same network. Try the URL in a browser. |
 | The mouth camera runs at ~30 fps | Expected with Babble firmware 1.3 over USB. It still looks smooth in Babble. |

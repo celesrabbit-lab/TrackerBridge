@@ -25,8 +25,12 @@ Descarga la APK desde [Releases](../../releases) e instálala con SideQuest, o c
 conectado a la PC por cable (y la depuración USB aceptada en el visor):
 
 ```
-adb install -r TrackerBridge-0.6.0.apk
+adb install -r TrackerBridge-0.7.0.apk
 ```
+
+Si tenías instalada la v0.6.0, desinstálala primero. Desde la v0.7.0 las versiones se firman con una
+clave nueva, así que la APK no se puede instalar encima de la v0.6.0. Las próximas actualizaciones sí
+se instalarán encima de la v0.7.0 sin problema.
 
 Opcional: precompila la app para que gaste menos CPU:
 
@@ -35,6 +39,9 @@ adb shell cmd package compile -m speed -f dev.rabbit.trackerbridge
 ```
 
 ## Primera vez
+
+La app está en inglés y en español. Usa el idioma del Quest, y puedes cambiarlo con el botón
+**Idioma / Language**.
 
 1. En el Quest: **Biblioteca → Orígenes desconocidos → Tracker Bridge**.
 2. Acepta el permiso de **cámaras USB** (Horizon OS lo exige para leer cámaras USB).

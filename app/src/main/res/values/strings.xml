@@ -1,4 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Tracker Bridge</string>
+
+    <!-- Main screen -->
+    <string name="subtitle">USB cameras on the Quest → ETVR and Project Babble on your PC</string>
+    <string name="quest_ip">Quest IP: %1$s</string>
+    <string name="no_wifi">The Quest is not connected to WiFi</string>
+    <string name="quest_ip_placeholder">QUEST-IP</string>
+    <string name="pc_hint">On your PC, enter each URL as a camera in ETVR or Babble.</string>
+    <string name="start_bridge">Start bridge</string>
+    <string name="stop_bridge">Stop bridge</string>
+    <string name="scan_cameras">Scan for cameras</string>
+    <string name="language">Language</string>
+    <string name="language_system">System default</string>
+    <string name="empty_running">Plug the cameras into the Quest\'s hub. If a USB permission prompt appears, accept it (tick \"use by default\" so it doesn\'t ask again).</string>
+    <string name="empty_stopped">The bridge is stopped.</string>
+
+    <!-- Camera status -->
+    <string name="status_disconnected">● Disconnected</string>
+    <string name="status_connected">● Connected</string>
+    <string name="status_starting">● Starting</string>
+    <string name="status_waiting">● Waiting for image</string>
+    <string name="status_reconnecting">● Reconnecting: %1$s</string>
+    <string name="pc_connected">PC connected</string>
+    <string name="pc_not_connected">PC not connected</string>
+    <string name="port_error">Could not open port %1$d</string>
+
+    <!-- Camera problems -->
+    <string name="problem_open_failed">could not open the USB device</string>
+    <string name="problem_isochronous">the camera uses isochronous mode (not supported)</string>
+    <string name="problem_no_interface">video interface not found</string>
+    <string name="problem_claim">could not claim the video interface</string>
+    <string name="problem_no_endpoint">video endpoint not found</string>
+    <string name="problem_format">the camera rejected the video format</string>
+    <string name="problem_stopped">the camera stopped sending images</string>
+    <string name="problem_invalid">receiving data but no valid images</string>
+    <string name="problem_other">unexpected error</string>
+
+    <!-- Messages -->
+    <string name="msg_need_usb_camera_permission">Without the USB cameras permission, the Quest won\'t let the app read the cameras. Allow it to continue.</string>
+    <string name="msg_missing_permission_open_app">USB cameras permission missing: open Tracker Bridge and allow it.</string>
+    <string name="msg_usb_denied_no_prompt">The Quest rejected the USB permission for %1$s without showing a prompt (%2$d ms).</string>
+    <string name="msg_usb_denied">USB permission denied for %1$s.</string>
+    <string name="msg_open_failed">Could not open %1$s: %2$s</string>
+    <string name="msg_not_mjpeg">%1$s is not a compatible MJPEG camera.</string>
+    <string name="camera_default_name">Camera %1$d</string>
+
+    <!-- Notification -->
+    <string name="notif_channel">Camera bridge</string>
+    <string name="notif_title">Tracker Bridge is running</string>
+    <string name="notif_text">Forwarding the USB cameras to your PC</string>
 </resources>

@@ -8,6 +8,11 @@ captures/
 *.apk
 *.aab
 
+# Firma de las versiones oficiales: nunca va en git
+keystore.properties
+*.jks
+*.keystore
+
 # IDE / sistema
 .idea/
 *.iml

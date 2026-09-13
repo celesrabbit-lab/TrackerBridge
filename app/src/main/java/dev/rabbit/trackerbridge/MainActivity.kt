@@ -2,6 +2,8 @@ package dev.rabbit.trackerbridge
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
+import android.app.LocaleManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,6 +13,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.LocaleList
 import android.os.Looper
 import android.os.SystemClock
 import android.view.View
@@ -18,6 +21,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import java.util.Locale
 
 /**
  * Pantalla liviana: solo nombres, direcciones y estado de cada camara. No muestra el video
@@ -76,7 +80,7 @@ class MainActivity : Activity() {
         if (hasCameraPermission()) {
             startBridge(BridgeService.ACTION_START)
         } else {
-            Bridge.message = "Sin el permiso de camaras USB el Quest no deja leer las camaras. Aceptalo para continuar."
+            Bridge.message = UiMessage(R.string.msg_need_usb_camera_permission)
         }
     }
 
@@ -106,11 +110,11 @@ class MainActivity : Activity() {
         requestMissingUsbPermission()
 
         val ip = NetUtils.localIpv4()
-        ipText.text = if (ip != null) "IP del Quest: $ip" else "El Quest no esta conectado a WiFi"
-        toggleButton.text = if (Bridge.serviceRunning) "Detener puente" else "Iniciar puente"
+        ipText.text = if (ip != null) getString(R.string.quest_ip, ip) else getString(R.string.no_wifi)
+        toggleButton.setText(if (Bridge.serviceRunning) R.string.stop_bridge else R.string.start_bridge)
         val msg = Bridge.message
-        messageText.text = msg.orEmpty()
-        messageText.visibility = if (msg.isNullOrEmpty()) View.GONE else View.VISIBLE
+        messageText.text = msg?.let { getString(it.res, *it.args) }.orEmpty()
+        messageText.visibility = if (msg == null) View.GONE else View.VISIBLE
 
         val slots = Bridge.snapshot()
         if (slots.map { it.key } != cards.keys.toList()) {
@@ -119,12 +123,7 @@ class MainActivity : Activity() {
             slots.forEach { cards[it.key] = addCard() }
         }
         emptyText.visibility = if (slots.isEmpty()) View.VISIBLE else View.GONE
-        emptyText.text = if (Bridge.serviceRunning) {
-            "Conecta las camaras al hub del Quest. Si aparece un aviso de permiso USB, aceptalo " +
-                "(marca \"usar siempre\" para que no vuelva a preguntar)."
-        } else {
-            "El puente esta detenido."
-        }
+        emptyText.setText(if (Bridge.serviceRunning) R.string.empty_running else R.string.empty_stopped)
 
         for (slot in slots) {
             val card = cards[slot.key] ?: continue
@@ -132,7 +131,7 @@ class MainActivity : Activity() {
             val streaming = cam?.state == UvcCamera.State.STREAMING
             card.title.text = slot.name
             card.title.setTextColor(if (cam != null) Color.WHITE else GRAY)
-            card.url.text = "http://${ip ?: "IP-del-Quest"}:${slot.port}/"
+            card.url.text = "http://${ip ?: getString(R.string.quest_ip_placeholder)}:${slot.port}/"
             card.status.text = statusLine(slot)
             card.status.setTextColor(
                 when {
@@ -170,17 +169,51 @@ class MainActivity : Activity() {
     private fun statusLine(slot: CameraSlot): String {
         val cam = slot.camera
         val parts = mutableListOf<String>()
-        when {
-            cam == null -> parts += "● Desconectada"
-            cam.state == UvcCamera.State.STREAMING -> {
-                parts += "● Conectada"
-                parts += "%.0f fps".format(slot.frames.fps)
+        when (cam?.state) {
+            null, UvcCamera.State.STOPPED -> parts += getString(R.string.status_disconnected)
+            UvcCamera.State.STREAMING -> {
+                parts += getString(R.string.status_connected)
+                parts += String.format(Locale.US, "%.0f fps", slot.frames.fps)
             }
-            else -> parts += "● ${cam.statusText}"
+            UvcCamera.State.STARTING -> parts += getString(R.string.status_starting)
+            UvcCamera.State.WAITING_FOR_IMAGE -> parts += getString(R.string.status_waiting)
+            UvcCamera.State.RETRYING -> parts += getString(R.string.status_reconnecting, problemText(cam.problem))
         }
-        parts += if (slot.server.clientCount == 0) "PC sin conectar" else "PC conectada"
-        slot.serverError?.let { parts += it }
+        parts += getString(if (slot.server.clientCount == 0) R.string.pc_not_connected else R.string.pc_connected)
+        if (slot.serverFailed) parts += getString(R.string.port_error, slot.port)
         return parts.joinToString("  ·  ")
+    }
+
+    private fun problemText(problem: UvcCamera.Problem?): String = getString(
+        when (problem) {
+            UvcCamera.Problem.OPEN_FAILED -> R.string.problem_open_failed
+            UvcCamera.Problem.ISOCHRONOUS -> R.string.problem_isochronous
+            UvcCamera.Problem.NO_VIDEO_INTERFACE -> R.string.problem_no_interface
+            UvcCamera.Problem.CLAIM_FAILED -> R.string.problem_claim
+            UvcCamera.Problem.NO_ENDPOINT -> R.string.problem_no_endpoint
+            UvcCamera.Problem.FORMAT_REJECTED -> R.string.problem_format
+            UvcCamera.Problem.STOPPED_SENDING -> R.string.problem_stopped
+            UvcCamera.Problem.INVALID_FRAMES -> R.string.problem_invalid
+            UvcCamera.Problem.OTHER, null -> R.string.problem_other
+        }
+    )
+
+    /** Idioma de la app, independiente del Quest: sistema, English o Español (Android 13+). */
+    private fun showLanguagePicker() {
+        if (Build.VERSION.SDK_INT < 33) return
+        val localeManager = getSystemService(LocaleManager::class.java) ?: return
+        val tags = arrayOf("", "en", "es")
+        val labels = arrayOf(getString(R.string.language_system), "English", "Español")
+        val current = localeManager.applicationLocales.toLanguageTags()
+        val checked = tags.indexOf(current).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.language)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                dialog.dismiss()
+                // Android recrea la pantalla con el idioma nuevo
+                localeManager.applicationLocales = LocaleList.forLanguageTags(tags[which])
+            }
+            .show()
     }
 
     private fun buildLayout(): View {
@@ -189,13 +222,13 @@ class MainActivity : Activity() {
             setPadding(dp(24), dp(20), dp(24), dp(20))
             setBackgroundColor(BACKGROUND)
         }
-        root.addView(text("Tracker Bridge", 28f, bold = true))
-        root.addView(text("Camaras USB del Quest → ETVR y Project Babble en la PC", 16f, SUBTLE))
+        root.addView(text(getString(R.string.app_name), 28f, bold = true))
+        root.addView(text(getString(R.string.subtitle), 16f, SUBTLE))
         ipText = text("", 20f).also {
             it.setPadding(0, dp(12), 0, dp(4))
             root.addView(it)
         }
-        root.addView(text("En la PC, pon cada direccion como camara en ETVR o Babble.", 15f, SUBTLE))
+        root.addView(text(getString(R.string.pc_hint), 15f, SUBTLE))
 
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -212,9 +245,15 @@ class MainActivity : Activity() {
         }
         buttons.addView(toggleButton)
         buttons.addView(Button(this).apply {
-            text = "Buscar camaras"
+            setText(R.string.scan_cameras)
             setOnClickListener { if (hasCameraPermission()) startBridge(BridgeService.ACTION_SCAN) else ensurePermissionsAndStart() }
         })
+        if (Build.VERSION.SDK_INT >= 33) {
+            buttons.addView(Button(this).apply {
+                text = "${getString(R.string.language)} / Language"
+                setOnClickListener { showLanguagePicker() }
+            })
+        }
         root.addView(buttons)
 
         messageText = text("", 16f, YELLOW).also {

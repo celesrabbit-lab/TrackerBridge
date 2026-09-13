@@ -7,6 +7,15 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.concurrent.ConcurrentHashMap
 
+/** Permiso de Horizon OS que UsbUserPermissionManager revisa antes de dar acceso a camaras USB. */
+const val USB_CAMERA_PERMISSION = "horizonos.permission.USB_CAMERA"
+
+fun UsbDevice.isVideoDevice(): Boolean =
+    (0 until interfaceCount).any { getInterface(it).interfaceClass == UsbConstants.USB_CLASS_VIDEO }
+
+/** Mensaje para la pantalla: guarda el texto como recurso y se traduce al mostrarse. */
+class UiMessage(val res: Int, vararg val args: Any)
+
 /** Una camara conocida. Su puerto HTTP sigue abierto aunque la camara se desconecte. */
 class CameraSlot(val key: String, @Volatile var name: String, val port: Int) {
     val frames = FrameBuffer()
@@ -16,7 +25,7 @@ class CameraSlot(val key: String, @Volatile var name: String, val port: Int) {
         private set
     @Volatile var deviceName: String? = null
         private set
-    @Volatile var serverError: String? = null
+    @Volatile var serverFailed = false
 
     fun attach(usbDeviceName: String, cam: UvcCamera) {
         deviceName = usbDeviceName
@@ -30,16 +39,10 @@ class CameraSlot(val key: String, @Volatile var name: String, val port: Int) {
     }
 }
 
-/** Permiso de Horizon OS que UsbUserPermissionManager revisa antes de dar acceso a camaras USB. */
-const val USB_CAMERA_PERMISSION = "horizonos.permission.USB_CAMERA"
-
-fun UsbDevice.isVideoDevice(): Boolean =
-    (0 until interfaceCount).any { getInterface(it).interfaceClass == UsbConstants.USB_CLASS_VIDEO }
-
 /** Estado compartido entre el servicio y la pantalla. */
 object Bridge {
     @Volatile var serviceRunning = false
-    @Volatile var message: String? = null
+    @Volatile var message: UiMessage? = null
 
     /** Dispositivo con aviso de permiso USB abierto (lo pide la pantalla, lo resuelve el servicio). */
     @Volatile var pendingPermission: String? = null

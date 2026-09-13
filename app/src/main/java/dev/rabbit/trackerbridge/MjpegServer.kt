@@ -126,7 +126,7 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
     private fun sendSnapshot(out: OutputStream) {
         val frame = frames.latest() ?: frames.awaitNewer(0, 2000)
         if (frame == null) {
-            sendText(out, 503, "Service Unavailable", "Sin imagen de la camara")
+            sendText(out, 503, "Service Unavailable", "No image from the camera yet")
             return
         }
         out.write(

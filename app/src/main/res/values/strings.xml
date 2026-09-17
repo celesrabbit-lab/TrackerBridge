@@ -28,11 +28,13 @@
 
     <!-- Camera problems -->
     <string name="problem_open_failed">could not open the USB device</string>
-    <string name="problem_isochronous">the camera uses isochronous mode (not supported)</string>
+    <string name="problem_isochronous">isochronous mode is not available on this device</string>
     <string name="problem_no_interface">video interface not found</string>
     <string name="problem_claim">could not claim the video interface</string>
     <string name="problem_no_endpoint">video endpoint not found</string>
     <string name="problem_format">the camera rejected the video format</string>
+    <string name="problem_bandwidth">not enough USB bandwidth (too many webcams on the hub?)</string>
+    <string name="problem_iso_failed">could not start the webcam video</string>
     <string name="problem_stopped">the camera stopped sending images</string>
     <string name="problem_invalid">receiving data but no valid images</string>
     <string name="problem_other">unexpected error</string>

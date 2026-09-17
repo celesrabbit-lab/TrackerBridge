@@ -20,6 +20,7 @@ Cameras (USB) → USB hub → Meta Quest (Tracker Bridge) → WiFi → PC (ETVR 
   window. It also starts by itself when you plug the hub in after a reboot.
 - Lightweight: no video preview on the headset. With three cameras on a Quest 3S it uses about 6.5%
   of one CPU core and ~33 MB of RAM.
+- **New in 0.8.0 (beta):** experimental support for regular USB webcams (see below).
 
 ## Tested setup
 
@@ -40,6 +41,28 @@ Other OpenIris-based UVC cameras should work, but they haven't been tested.
 - A USB-C OTG hub if you use more than one camera.
 - The Quest and the PC on the same network (5 GHz or 6 GHz WiFi recommended).
 
+## USB webcams (experimental, 0.8.0 beta)
+
+Most regular USB webcams send video with *isochronous* USB transfers, which Android's Java USB API
+can't read. Since 0.8.0, Tracker Bridge reads them with a small native library. This hasn't been
+tested with a real webcam yet, so reports are very welcome.
+
+- The webcam must support **MJPEG** (most 720p and 1080p webcams do; some very cheap 480p ones only
+  send uncompressed video, which isn't supported).
+- The app picks the MJPEG resolution closest to 240x240 at the highest frame rate the camera offers
+  (for example, 320x240 at 120 fps on the HBVCAM GC0308 module).
+- Webcams show an extra status line with the video mode and USB mode, or the technical detail of the
+  last error. OpenIris cameras (ETVR, Babble) keep working exactly as before.
+- Two webcams on the same USB 2.0 hub may not fit if both ask for a lot of bandwidth. The app tries
+  smaller USB packet sizes when the headset refuses one.
+
+If a webcam doesn't work, please open an issue with:
+1. A screenshot of the camera's card in Tracker Bridge.
+2. The camera's USB descriptors: on a Windows PC, open
+   [USB Device Tree Viewer](https://www.uwe-sieber.de/usbtreeview_e.html), select the camera's
+   **device entry** (usually "USB Composite Device", one level above "USB Camera"), and copy all the
+   text from the right panel.
+
 ## Pico headsets (experimental)
 
 There's a separate APK for Pico headsets, `TrackerBridge-Pico-x.y.z.apk`, on the Releases page. It
@@ -58,7 +81,7 @@ Download the APK from the [Releases](../../releases) page and install it with Si
 while the Quest is connected to the PC by cable:
 
 ```
-adb install -r TrackerBridge-0.7.0.apk
+adb install -r TrackerBridge-x.y.z.apk
 ```
 
 Optional: precompile the app so it uses less CPU:
@@ -102,6 +125,7 @@ and you don't need to open it.
 | Problem | What to do |
 |---|---|
 | A camera doesn't show up | Open Tracker Bridge and tap **Scan for cameras**. Check the cable and the hub. |
+| One camera freezes for a moment every few seconds | Try another USB cable. In testing, a faulty cable caused pauses of 0.1 to 0.7 seconds while other cameras on the same hub were fine. |
 | The app says the Quest rejected the USB permission without a prompt | The USB cameras permission is missing. Grant it in the app's permissions, or reinstall the app and allow it. |
 | No image in ETVR or Babble | Check the Quest's IP (shown in the app) and that both devices are on the same network. Try the URL in a browser. |
 | The mouth camera runs at ~30 fps | Expected with Babble firmware 1.3 over USB. It still looks smooth in Babble. |
@@ -128,10 +152,14 @@ To see the app's logs:
 adb logcat -s BridgeService UvcCamera
 ```
 
+Every 10 seconds, each camera logs its frame rate, frame size, the time between frames (median, 95th
+percentile and maximum), how long a frame takes to cross the USB cable, and why any frame was dropped.
+
 ## Build from source
 
-Requirements: JDK 17 or newer and the Android SDK (platform 35, build-tools 35.0.0). Point Gradle to
-your SDK with `ANDROID_HOME` or a `local.properties` file containing `sdk.dir=/path/to/Android/Sdk`.
+Requirements: JDK 17 or newer and the Android SDK (platform 35, build-tools 35.0.0, NDK 27.0.12077973
+and CMake 3.22.1). Point Gradle to your SDK with `ANDROID_HOME` or a `local.properties` file containing
+`sdk.dir=/path/to/Android/Sdk`.
 
 ```
 ./gradlew testQuestDebugUnitTest assembleRelease
@@ -145,16 +173,20 @@ fine for sideloading. The code is shared; each headset's permission and manifest
 
 ## How it works
 
-- **USB:** reads UVC cameras (MJPEG over a bulk endpoint) with `UsbDeviceConnection`, bypassing
-  Android's camera stack so it keeps working in the background. The payload parser handles OpenIris'
-  64-byte payloads and reads that merge several payloads.
+- **USB:** reads UVC cameras (MJPEG) with `UsbDeviceConnection`, bypassing Android's camera stack so it
+  keeps working in the background. OpenIris boards use a bulk endpoint; the payload parser handles their
+  64-byte payloads and reads that merge several payloads. Webcams use isochronous endpoints, which the
+  native code in `app/src/main/cpp/` reads by sending URBs to the kernel (usbfs) on the same file
+  descriptor. Each request holds 8 packets (1 ms on USB 2.0), so a frame waits at most about 1 ms.
 - **Permission:** on Horizon OS, USB access to video-class devices requires the runtime permission
   `horizonos.permission.USB_CAMERA`, not `android.permission.CAMERA`.
 - **Network:** each camera is an HTTP MJPEG stream (`multipart/x-mixed-replace`) that matches OpenIris'
-  WiFi stream. Only the newest frame is sent, so a slow client skips frames instead of adding lag.
+  WiFi stream. Only the newest frame is sent, so a slow client skips frames instead of adding lag. The
+  socket's send queue only holds a couple of frames, so a WiFi hiccup doesn't leave old frames in line.
   Packets are tagged with voice priority (WMM).
 - **Background:** a `connectedDevice` foreground service. The wake lock and the low-latency WiFi lock
-  are held only while a camera is connected.
+  are held only while a camera is connected. Since Android 14, the low-latency WiFi mode only applies
+  while the app holding the lock is in the foreground; during PCVR, Steam Link keeps WiFi in that mode.
 - **Reconnect:** `UsbAttachActivity` has no UI. It receives the USB attach event and wakes the service.
 
 ## License

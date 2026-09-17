@@ -1,5 +1,7 @@
 package dev.rabbit.trackerbridge
 
+import android.os.ParcelFileDescriptor
+import android.system.Os
 import android.util.Log
 import java.io.BufferedOutputStream
 import java.io.IOException
@@ -67,8 +69,6 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
             } catch (_: Exception) {
             }
             socket.soTimeout = 10_000
-            // Buffer de envio chico: si la red se atrasa, se saltan cuadros en vez de acumular retraso
-            socket.sendBufferSize = 64 * 1024
 
             val input = socket.getInputStream()
             val requestLine = readLine(input) ?: return
@@ -83,7 +83,7 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
                 path.startsWith("/favicon") -> sendText(out, 404, "Not Found", "")
                 path.startsWith("/snapshot") || path.startsWith("/capture") || path.startsWith("/jpg") -> sendSnapshot(out)
                 path.startsWith("/control") -> sendText(out, 200, "OK", "")
-                else -> sendStream(out)
+                else -> sendStream(socket, out)
             }
         } catch (_: IOException) {
             // cliente desconectado
@@ -98,7 +98,7 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
         }
     }
 
-    private fun sendStream(out: OutputStream) {
+    private fun sendStream(socket: Socket, out: OutputStream) {
         out.write(
             ("HTTP/1.1 200 OK\r\n" +
                 "Content-Type: multipart/x-mixed-replace;boundary=$BOUNDARY\r\n" +
@@ -109,10 +109,15 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
         )
         out.flush()
         var lastSeq = 0L
+        var queueLimited = false
         val digits = ByteArray(10)
         while (running) {
             val frame = frames.awaitNewer(lastSeq, 1000) ?: continue
             lastSeq = frame.seq
+            if (!queueLimited) {
+                limitSendQueue(socket, frame.data.size)
+                queueLimited = true
+            }
             // Mismo orden que el firmware OpenIris: separador, cabecera de la parte y JPEG.
             // La cabecera se arma con bytes fijos para no crear textos nuevos en cada cuadro.
             out.write(PART_PREFIX)
@@ -120,6 +125,26 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
             out.write(PART_SUFFIX)
             out.write(frame.data)
             out.flush()
+        }
+    }
+
+    /**
+     * Si el WiFi se traba un momento, los cuadros viejos no deben quedar en cola: al volver llegarian
+     * tarde a la PC. Con una cola de unos pocos cuadros, el envio espera y FrameBuffer se queda solo
+     * con el mas nuevo. El tamano depende del peso de los cuadros de cada camara.
+     */
+    private fun limitSendQueue(socket: Socket, frameSize: Int) {
+        try {
+            socket.sendBufferSize = (frameSize * 4).coerceIn(8 * 1024, 64 * 1024)
+        } catch (_: Exception) {
+        }
+        // Linux: la escritura espera hasta que lo que aun no salio por el WiFi baje de este limite
+        try {
+            ParcelFileDescriptor.fromSocket(socket).use {
+                Os.setsockoptInt(it.fileDescriptor, IPPROTO_TCP, TCP_NOTSENT_LOWAT, (frameSize * 2).coerceIn(4 * 1024, 64 * 1024))
+            }
+        } catch (_: Exception) {
+            // En pruebas fuera de Android no existe: alcanza con el buffer de envio
         }
     }
 
@@ -175,6 +200,8 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
 
     companion object {
         private const val TAG = "MjpegServer"
+        private const val IPPROTO_TCP = 6
+        private const val TCP_NOTSENT_LOWAT = 25
         private const val BOUNDARY = "123456789000000000000987654321"
         private val PART_PREFIX =
             "\r\n--$BOUNDARY\r\nContent-Type: image/jpeg\r\nContent-Length: ".toByteArray(Charsets.US_ASCII)

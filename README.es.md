@@ -19,6 +19,28 @@ Cámaras (USB) → hub → Meta Quest (Tracker Bridge) → WiFi → PC (ETVR / B
 - Hub USB-C OTG (probado con un hub genérico de 4 puertos).
 - Quest y PC en la misma red.
 
+## Webcams USB (experimental, 0.8.0 beta)
+
+La mayoría de las webcams USB comunes mandan el video con transferencias USB *isócronas*, que la API
+USB de Android en Java no puede leer. Desde la 0.8.0, Tracker Bridge las lee con una pequeña librería
+nativa. Todavía no se ha probado con una webcam real, así que los reportes son muy bienvenidos.
+
+- La webcam tiene que soportar **MJPEG** (casi todas las de 720p y 1080p lo hacen; algunas muy baratas
+  de 480p solo mandan video sin comprimir, y esas no funcionan).
+- La app elige la resolución MJPEG más parecida a 240x240, con los fps más altos que ofrezca la cámara
+  (por ejemplo, 320x240 a 120 fps en el módulo HBVCAM GC0308).
+- Las webcams muestran una línea extra de estado con el modo de video y el modo USB, o el detalle
+  técnico del último error. Las cámaras OpenIris (ETVR, Babble) siguen funcionando exactamente igual.
+- Dos webcams en el mismo hub USB 2.0 pueden no caber si las dos piden mucho ancho de banda. Si el visor
+  rechaza un tamaño de paquete USB, la app prueba con uno más chico.
+
+Si una webcam no funciona, abre un issue con:
+1. Una captura de la tarjeta de la cámara en Tracker Bridge.
+2. Los descriptores USB de la cámara: en una PC con Windows, abre
+   [USB Device Tree Viewer](https://www.uwe-sieber.de/usbtreeview_e.html), selecciona la **entrada del
+   dispositivo** (normalmente "USB Composite Device", un nivel arriba de "USB Camera") y copia todo el
+   texto del panel derecho.
+
 ## Visores Pico (experimental)
 
 Hay una APK aparte para visores Pico, `TrackerBridge-Pico-x.y.z.apk`, en la página de Releases.
@@ -37,7 +59,7 @@ Descarga la APK desde [Releases](../../releases) e instálala con SideQuest, o c
 conectado a la PC por cable (y la depuración USB aceptada en el visor):
 
 ```
-adb install -r TrackerBridge-0.7.0.apk
+adb install -r TrackerBridge-x.y.z.apk
 ```
 
 Opcional: precompila la app para que gaste menos CPU:
@@ -80,6 +102,7 @@ reconecta sola sin abrir ventanas.
 | Problema | Qué hacer |
 |---|---|
 | Una cámara no aparece | Abre Tracker Bridge y pulsa **Buscar cámaras**. Revisa el cable y el hub. |
+| Una cámara se congela un momento cada pocos segundos | Prueba con otro cable USB. En las pruebas, un cable defectuoso causó pausas de 0,1 a 0,7 segundos mientras las otras cámaras del mismo hub iban bien. |
 | "El Quest rechazó el permiso USB sin mostrar aviso" | Falta el permiso de cámaras USB. Revísalo en los permisos de la app o reinstálala y acéptalo. |
 | ETVR o Babble sin imagen | Revisa que la IP del Quest no haya cambiado (la muestra la app) y que la PC y el Quest estén en la misma red. Prueba la dirección en el navegador. |
 | La boca va a 30 fps | Es normal con el firmware 1.3 de Babble por USB. En Babble se ve fluido. |
@@ -106,10 +129,14 @@ Para ver los registros de la app:
 adb logcat -s BridgeService UvcCamera
 ```
 
+Cada 10 segundos, cada cámara anota sus fps, el peso de los cuadros, el tiempo entre cuadros (mediana,
+percentil 95 y máximo), cuánto tarda un cuadro en pasar por el cable USB y por qué se descartó algún cuadro.
+
 ## Compilar desde el código
 
-Requisitos: JDK 17 o más nuevo y Android SDK (plataforma 35 y build-tools 35.0.0). Indica la ruta del
-SDK con `ANDROID_HOME` o con un archivo `local.properties` que contenga `sdk.dir=ruta/al/Android/Sdk`.
+Requisitos: JDK 17 o más nuevo y Android SDK (plataforma 35, build-tools 35.0.0, NDK 27.0.12077973 y
+CMake 3.22.1). Indica la ruta del SDK con `ANDROID_HOME` o con un archivo `local.properties` que contenga
+`sdk.dir=ruta/al/Android/Sdk`.
 
 ```
 gradlew.bat testQuestDebugUnitTest assembleRelease
@@ -122,13 +149,20 @@ visor están en `app/src/quest/` y `app/src/pico/`.
 
 ## Cómo funciona
 
-- Lee las cámaras UVC (MJPEG, endpoint bulk) directamente con la API USB host de Android, sin el
-  sistema de cámaras, para seguir funcionando en segundo plano mientras juegas.
+- Lee las cámaras UVC (MJPEG) directamente con la API USB host de Android, sin el sistema de cámaras,
+  para seguir funcionando en segundo plano mientras juegas. Las placas OpenIris usan un endpoint bulk;
+  las webcams usan endpoints isócronos, que lee el código nativo de `app/src/main/cpp/` enviando pedidos
+  (URB) al kernel (usbfs). Cada pedido junta 8 paquetes (1 ms en USB 2.0), así que un cuadro espera 1 ms
+  como mucho.
 - Horizon OS exige el permiso `horizonos.permission.USB_CAMERA` para dar acceso USB a cámaras
   (no `android.permission.CAMERA`).
 - Cada cámara se publica como stream MJPEG por HTTP, con el mismo formato que OpenIris usa por WiFi.
+  Solo se manda el cuadro más nuevo, y la cola de envío guarda apenas un par de cuadros: si el WiFi se
+  traba un momento, no quedan cuadros viejos esperando.
 - Un servicio en primer plano (`connectedDevice`) mantiene CPU y WiFi despiertos solo mientras hay
-  cámaras conectadas. Los paquetes van marcados con prioridad de voz (WMM).
+  cámaras conectadas. Los paquetes van marcados con prioridad de voz (WMM). Desde Android 14, el modo
+  WiFi de baja latencia solo funciona mientras la app que lo pide está en primer plano; mientras juegas
+  en PCVR, Steam Link lo mantiene activo.
 - `UsbAttachActivity` (sin interfaz) recibe el aviso de "USB conectado" para reconectar sin mostrar ventanas.
 
 ## Licencia

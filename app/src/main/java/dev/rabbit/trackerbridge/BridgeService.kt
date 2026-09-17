@@ -213,6 +213,8 @@ class BridgeService : Service() {
             Bridge.message = UiMessage(R.string.msg_not_mjpeg, label)
             return
         }
+        // Descriptores crudos en el registro: permiten armar pruebas con camaras que no tenemos a mano
+        Log.i(TAG, "USB descriptors of '$label': ${raw?.joinToString("") { "%02x".format(it) }}")
 
         val serial = try {
             device.serialNumber

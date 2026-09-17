@@ -1,5 +1,7 @@
 package dev.rabbit.trackerbridge
 
+import kotlin.math.abs
+
 /** Lo que necesitamos de los descriptores USB de una camara UVC. */
 data class UvcFrameDesc(
     val index: Int,
@@ -7,6 +9,8 @@ data class UvcFrameDesc(
     val height: Int,
     val defaultInterval: Int, // en unidades de 100 ns
     val intervals: List<Int>,
+    /** Intervalo minimo si la camara declara un rango continuo (bFrameIntervalType = 0); si no, 0. */
+    val minContinuousInterval: Int = 0,
 )
 
 data class UvcStreamingEndpoint(
@@ -15,7 +19,12 @@ data class UvcStreamingEndpoint(
     val address: Int,
     val isBulk: Boolean,
     val maxPacketSize: Int,
-)
+    /** Transacciones por intervalo en alta velocidad (1 a 3), de los bits 11-12 de wMaxPacketSize. */
+    val transactions: Int = 1,
+) {
+    /** Bytes que caben en cada paquete isocrono. */
+    val effectivePacketSize: Int get() = maxPacketSize * transactions
+}
 
 data class UvcInfo(
     val bcdUvc: Int,
@@ -34,6 +43,20 @@ data class UvcInfo(
         }
 
     fun bulkEndpoint(): UvcStreamingEndpoint? = endpoints.firstOrNull { it.isBulk }
+
+    /** Endpoints isocronos (uno por alt setting), de menor a mayor ancho de banda. */
+    fun isoEndpoints(): List<UvcStreamingEndpoint> =
+        endpoints.filter { !it.isBulk }.sortedBy { it.effectivePacketSize }
+
+    /** El alt setting mas chico que alcanza para [maxPayload] bytes; si ninguno alcanza, el mas grande. */
+    fun isoEndpointFor(maxPayload: Int): UvcStreamingEndpoint? {
+        val iso = isoEndpoints()
+        return iso.firstOrNull { it.effectivePacketSize >= maxPayload } ?: iso.lastOrNull()
+    }
+
+    /** La resolucion MJPEG mas parecida a 240x240, la de las placas OpenIris que usan ETVR y Babble. */
+    fun frameClosestTo240(): UvcFrameDesc =
+        mjpegFrames.minByOrNull { abs(it.width * it.height - 240 * 240) } ?: mjpegFrames.first()
 }
 
 object UvcDescriptors {
@@ -87,12 +110,14 @@ object UvcDescriptors {
                     val address = u8(raw, i + 2)
                     val attributes = u8(raw, i + 3) and 0x03
                     if ((address and 0x80) != 0 && (attributes == 1 || attributes == 2)) {
+                        val rawSize = u16(raw, i + 4)
                         endpoints += UvcStreamingEndpoint(
                             interfaceId = ifId,
                             altSetting = ifAlt,
                             address = address,
                             isBulk = attributes == 2,
-                            maxPacketSize = u16(raw, i + 4) and 0x7FF,
+                            maxPacketSize = rawSize and 0x7FF,
+                            transactions = (1 + ((rawSize shr 11) and 0x3)).coerceAtMost(3),
                         )
                     }
                 }
@@ -123,6 +148,7 @@ object UvcDescriptors {
                                     height = u16(raw, i + 7),
                                     defaultInterval = u32(raw, i + 21),
                                     intervals = intervals,
+                                    minContinuousInterval = if (intervalType == 0 && len >= 30) u32(raw, i + 26) else 0,
                                 )
                             }
                         }

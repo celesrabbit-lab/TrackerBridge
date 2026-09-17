@@ -26,11 +26,13 @@
 
     <!-- Problemas de las cámaras -->
     <string name="problem_open_failed">no se pudo abrir el USB</string>
-    <string name="problem_isochronous">la cámara usa modo isócrono (no soportado)</string>
+    <string name="problem_isochronous">este equipo no puede usar el modo isócrono</string>
     <string name="problem_no_interface">no se encontró la interfaz de video</string>
     <string name="problem_claim">no se pudo reclamar la interfaz de video</string>
     <string name="problem_no_endpoint">no se encontró el endpoint de video</string>
     <string name="problem_format">la cámara rechazó el formato de video</string>
+    <string name="problem_bandwidth">no alcanza el ancho de banda USB (¿demasiadas webcams en el hub?)</string>
+    <string name="problem_iso_failed">no se pudo iniciar el video de la webcam</string>
     <string name="problem_stopped">la cámara dejó de enviar imágenes</string>
     <string name="problem_invalid">llegan datos pero no imágenes válidas</string>
     <string name="problem_other">error inesperado</string>

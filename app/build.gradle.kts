@@ -18,11 +18,22 @@ android {
     namespace = "dev.rabbit.trackerbridge"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
+    // Codigo en C para las webcams (transferencias isocronas)
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "dev.rabbit.trackerbridge"
         minSdk = 29
         targetSdk = 34
+        // Quest y Pico son arm64: no hace falta incluir otras arquitecturas
+        ndk { abiFilters += "arm64-v8a" }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     // Una APK por visor. El codigo es comun; el permiso y el manifiesto de cada visor van en src/<visor>/
@@ -30,15 +41,15 @@ android {
     productFlavors {
         create("quest") {
             dimension = "headset"
-            versionCode = 9
-            versionName = "0.7.0"
+            versionCode = 12
+            versionName = "0.8.0-beta.1"
         }
         create("pico") {
             dimension = "headset"
             // App separada (dev.rabbit.trackerbridge.pico): se instala junto a la de Quest sin conflictos
             applicationIdSuffix = ".pico"
-            versionCode = 1
-            versionName = "0.1.0"
+            versionCode = 2
+            versionName = "0.2.0-beta.1"
         }
     }
 

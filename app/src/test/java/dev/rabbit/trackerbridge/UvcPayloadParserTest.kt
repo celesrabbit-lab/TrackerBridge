@@ -146,6 +146,7 @@ class UvcPayloadParserTest {
         for (p in payloads(bad, 0, 32768, error = true) + payloads(good, 1, 32768)) parser.feed(p, p.size, true)
         assertFrames(listOf(good), got)
         assertEquals(1, dropped)
+        assertEquals("camera error bit", parser.lastDropReason)
     }
 
     @Test

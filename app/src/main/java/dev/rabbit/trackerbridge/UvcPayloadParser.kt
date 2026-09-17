@@ -19,10 +19,15 @@ class UvcPayloadParser(
     private var frame = ByteArray(initialFrameCapacity)
     private var frameLen = 0
     private var frameError = false
+    private var errorCause = ""
     private var lastFid = -1
     private var discardUntilBoundary = false
 
     var lastFrameNanos = 0L
+        private set
+
+    /** Por que se descarto el ultimo cuadro invalido (solo para el registro). */
+    var lastDropReason = ""
         private set
 
     /** Cuadros validos armados desde el inicio (para estadisticas). */
@@ -51,7 +56,7 @@ class UvcPayloadParser(
             if (hle < 2 || hle > 64 || (hle > avail && boundaryAtEnd)) {
                 // Cabecera invalida: se perdio la sincronia; se descarta hasta el proximo borde.
                 // Solo arruina el cuadro si ya habia uno a medias.
-                if (frameLen > 0) frameError = true
+                if (frameLen > 0) markError("bad header")
                 s = len
                 if (!boundaryAtEnd) discardUntilBoundary = true
                 break
@@ -62,7 +67,7 @@ class UvcPayloadParser(
             val eof = (bfh and 0x02) != 0
             if (lastFid >= 0 && fid != lastFid) finishFrame()
             lastFid = fid
-            if ((bfh and 0x40) != 0) frameError = true
+            if ((bfh and 0x40) != 0) markError("camera error bit")
 
             val dataStart = s + hle
             val end: Int = if (!eof) {
@@ -117,7 +122,7 @@ class UvcPayloadParser(
         if (n <= 0) return
         if (frameLen + n > frame.size) {
             if (frame.size >= MAX_FRAME) {
-                frameError = true
+                markError("too big")
                 return
             }
             frame = frame.copyOf(maxOf(frame.size * 2, frameLen + n))
@@ -137,10 +142,20 @@ class UvcPayloadParser(
             validFrames++
             onFrame(frame.copyOf(end))
         } else if (frameLen > 0) {
+            lastDropReason = when {
+                frameError -> errorCause
+                end < minEnd -> "no JPEG end"
+                else -> "no JPEG start"
+            }
             onDropped()
         }
         frameLen = 0
         frameError = false
+    }
+
+    private fun markError(cause: String) {
+        if (!frameError) errorCause = cause
+        frameError = true
     }
 
     private companion object {

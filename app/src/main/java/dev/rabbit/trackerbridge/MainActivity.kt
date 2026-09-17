@@ -179,6 +179,8 @@ class MainActivity : Activity() {
             UvcCamera.State.WAITING_FOR_IMAGE -> parts += getString(R.string.status_waiting)
             UvcCamera.State.RETRYING -> parts += getString(R.string.status_reconnecting, problemText(cam.problem))
         }
+        // Webcams: modo USB o detalle del error, para que una captura de pantalla sirva de diagnostico
+        cam?.diagnostics?.takeIf { it.isNotEmpty() }?.let { parts += it }
         parts += getString(if (slot.server.clientCount == 0) R.string.pc_not_connected else R.string.pc_connected)
         if (slot.serverFailed) parts += getString(R.string.port_error, slot.port)
         return parts.joinToString("  ·  ")
@@ -192,6 +194,8 @@ class MainActivity : Activity() {
             UvcCamera.Problem.CLAIM_FAILED -> R.string.problem_claim
             UvcCamera.Problem.NO_ENDPOINT -> R.string.problem_no_endpoint
             UvcCamera.Problem.FORMAT_REJECTED -> R.string.problem_format
+            UvcCamera.Problem.NO_BANDWIDTH -> R.string.problem_bandwidth
+            UvcCamera.Problem.ISO_FAILED -> R.string.problem_iso_failed
             UvcCamera.Problem.STOPPED_SENDING -> R.string.problem_stopped
             UvcCamera.Problem.INVALID_FRAMES -> R.string.problem_invalid
             UvcCamera.Problem.OTHER, null -> R.string.problem_other

@@ -37,7 +37,29 @@
     <string name="problem_iso_failed">could not start the webcam video</string>
     <string name="problem_stopped">the camera stopped sending images</string>
     <string name="problem_invalid">receiving data but no valid images</string>
+    <string name="problem_serial_setup">could not set up the serial port</string>
+    <string name="problem_not_tracker">no video from this device: it does not look like a wired tracker</string>
     <string name="problem_other">unexpected error</string>
+
+    <!-- Video mode: resolution and frame rate are chosen separately -->
+    <string name="value_auto">auto</string>
+    <string name="res_button">Resolution: %1$s</string>
+    <string name="fps_button">FPS: %1$s</string>
+    <string name="res_title">%1$s: resolution</string>
+    <string name="fps_title">%1$s: frames per second</string>
+    <string name="res_auto">Automatic (closest to 240x240)</string>
+    <string name="fps_auto">Automatic (the fastest the camera offers)</string>
+    <string name="res_item">%1$d x %2$d</string>
+    <string name="fps_item">%1$d fps</string>
+    <string name="mode_warning">Bigger frames and higher frame rates use more USB bandwidth, more WiFi and more CPU on the PC. On a shared hub they can cause dropped frames, freezes or extra latency, and the camera may not reach the frame rate it advertises. Go back to Automatic if anything breaks.</string>
+    <string name="mode_close">Close</string>
+
+    <!-- Safety notice for cameras that are not ETVR/Babble hardware -->
+    <string name="status_risk">● Waiting: safety notice not accepted</string>
+    <string name="risk_title">Before pointing a DIY camera at your eyes</string>
+    <string name="risk_message">Tracker Bridge cannot tell whether a USB camera is safe to point at your eyes.\n\nSome DIY camera modules come with infrared LEDs that are too strong, or too close to the eye, for continuous use. The EyeTrackVR and Project Babble communities advise against the GC0308 IR module for eye tracking in particular: users report eye pain and dryness, and long infrared exposure is linked to lens damage over time.\n\nOnly point a camera at your eyes if you know its illumination is safe for that, such as the official EyeTrackVR or Project Babble builds. A camera used for mouth or face tracking does not have this problem.\n\nBy continuing you confirm that you understand the risk and that the hardware you use is your own responsibility.</string>
+    <string name="risk_accept">I understand the risk</string>
+    <string name="risk_decline">Not now</string>
 
     <!-- Messages -->
     <string name="msg_need_usb_camera_permission">Without the USB cameras permission, the Quest won\'t let the app read the cameras. Allow it to continue.</string>
@@ -47,6 +69,16 @@
     <string name="msg_open_failed">Could not open %1$s: %2$s</string>
     <string name="msg_not_mjpeg">%1$s is not a compatible MJPEG camera.</string>
     <string name="camera_default_name">Camera %1$d</string>
+    <string name="serial_default_name">Serial camera (%1$s)</string>
+
+    <!-- USB diagnostics -->
+    <string name="usb_devices_title">Other USB devices the headset sees:</string>
+    <string name="usb_kind_uvc">USB video camera</string>
+    <string name="usb_kind_serial">serial board (%1$s)</string>
+    <string name="usb_kind_unknown">not a camera (USB class %1$d)</string>
+    <string name="usb_permission_ok">permission granted</string>
+    <string name="usb_permission_missing">waiting for the USB permission</string>
+    <string name="msg_service_blocked">The system would not let the bridge start by itself. Open Tracker Bridge and press Start bridge.</string>
 
     <!-- Notification -->
     <string name="notif_channel">Camera bridge</string>

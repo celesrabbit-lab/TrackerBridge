@@ -21,45 +21,46 @@ class UvcCamera(
     val device: UsbDevice,
     val info: UvcInfo,
     private val frames: FrameBuffer,
-) {
-    enum class State { STARTING, WAITING_FOR_IMAGE, STREAMING, RETRYING, STOPPED }
+    /** Resolucion y fps elegidos a mano en la pantalla; cada parte puede ser automatica. */
+    private val choice: () -> VideoChoice = { VideoChoice() },
+) : TrackerCamera {
+    private class CameraException(val problem: CameraProblem, message: String) : IOException(message)
 
-    /** Por que fallo el ultimo intento. La pantalla lo traduce al idioma elegido. */
-    enum class Problem {
-        OPEN_FAILED, ISOCHRONOUS, NO_VIDEO_INTERFACE, CLAIM_FAILED, NO_ENDPOINT,
-        FORMAT_REJECTED, NO_BANDWIDTH, ISO_FAILED, STOPPED_SENDING, INVALID_FRAMES, OTHER,
-    }
-
-    private class CameraException(val problem: Problem, message: String) : IOException(message)
-
-    @Volatile var state = State.STOPPED
+    @Volatile override var state = CameraState.STOPPED
         private set
-    @Volatile var problem: Problem? = null
+    @Volatile override var problem: CameraProblem? = null
         private set
-    @Volatile var resolution = ""
+    @Volatile override var resolution = ""
         private set
 
     /** Solo webcams (isocronas): modo USB elegido o detalle tecnico del ultimo error, para la pantalla. */
-    @Volatile var diagnostics = ""
+    @Volatile override var diagnostics = ""
         private set
 
     private val isochronous = info.bulkEndpoint() == null
 
     @Volatile private var running = false
+    /** Cambio el modo de video: cerrar el stream y volver a abrirlo con el modo nuevo. */
+    @Volatile private var reopen = false
     private var thread: Thread? = null
 
-    fun start() {
+    /** Vuelve a negociar el video (al cambiar la resolucion o los fps desde la pantalla). */
+    override fun reopenStream() {
+        reopen = true
+    }
+
+    override fun start() {
         if (running) return
         running = true
         thread = Thread({ runLoop() }, "uvc-${device.deviceName}").also { it.start() }
     }
 
-    fun stop() {
+    override fun stop() {
         running = false
         thread?.interrupt()
         thread?.join(2000)
         thread = null
-        state = State.STOPPED
+        state = CameraState.STOPPED
         frames.resetStats()
     }
 
@@ -70,46 +71,49 @@ class UvcCamera(
             Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
         }
         while (running) {
-            state = State.STARTING
+            state = CameraState.STARTING
+            reopen = false
             try {
                 openAndStream()
             } catch (e: Exception) {
                 if (running) {
                     Log.w(TAG, "${device.productName}: ${e.message}", e)
-                    problem = (e as? CameraException)?.problem ?: Problem.OTHER
+                    problem = (e as? CameraException)?.problem ?: CameraProblem.OTHER
                     if (isochronous) diagnostics = e.message.orEmpty()
                 }
             }
             frames.resetStats()
             if (!running) break
-            state = State.RETRYING
+            // Cambiar el modo de video no es un error: se vuelve a abrir enseguida y sin avisar
+            val changingMode = reopen
+            if (!changingMode) state = CameraState.RETRYING
             try {
-                Thread.sleep(1000)
+                Thread.sleep(if (changingMode) 100 else 1000)
             } catch (_: InterruptedException) {
                 break
             }
         }
-        state = State.STOPPED
+        state = CameraState.STOPPED
     }
 
     private fun openAndStream() {
         val conn = usbManager.openDevice(device)
-            ?: throw CameraException(Problem.OPEN_FAILED, "openDevice returned null (missing permission?)")
+            ?: throw CameraException(CameraProblem.OPEN_FAILED, "openDevice returned null (missing permission?)")
         val claimed = mutableListOf<UsbInterface>()
         var bulkEndpoint: UsbEndpoint? = null
         var isoInterface: UsbInterface? = null
         try {
             val bulk = info.bulkEndpoint()
             if (bulk == null) {
-                if (info.isoEndpoints().isEmpty()) throw CameraException(Problem.NO_ENDPOINT, "No video endpoint in the descriptors")
-                if (!IsoUsb.available) throw CameraException(Problem.ISOCHRONOUS, "Isochronous transfers not available (native library missing)")
+                if (info.isoEndpoints().isEmpty()) throw CameraException(CameraProblem.NO_ENDPOINT, "No video endpoint in the descriptors")
+                if (!IsoUsb.available) throw CameraException(CameraProblem.ISOCHRONOUS, "Isochronous transfers not available (native library missing)")
             }
 
             findInterface(info.controlInterfaceId, 0)?.let { if (conn.claimInterface(it, true)) claimed += it }
             val vs0 = findInterface(info.streamingInterfaceId, 0)
-                ?: throw CameraException(Problem.NO_VIDEO_INTERFACE, "Video streaming interface not found")
+                ?: throw CameraException(CameraProblem.NO_VIDEO_INTERFACE, "Video streaming interface not found")
             if (!conn.claimInterface(vs0, true)) {
-                throw CameraException(Problem.CLAIM_FAILED, "Could not claim the video streaming interface")
+                throw CameraException(CameraProblem.CLAIM_FAILED, "Could not claim the video streaming interface")
             }
             claimed += vs0
 
@@ -118,13 +122,11 @@ class UvcCamera(
                 if (bulk.altSetting != 0) conn.setInterface(epIface)
                 bulkEndpoint = (0 until epIface.endpointCount).map { epIface.getEndpoint(it) }
                     .firstOrNull { it.address == bulk.address && it.direction == UsbConstants.USB_DIR_IN }
-                    ?: throw CameraException(Problem.NO_ENDPOINT, "Video endpoint not found")
+                    ?: throw CameraException(CameraProblem.NO_ENDPOINT, "Video endpoint not found")
             }
 
-            val frame = info.frameClosestTo240()
-            val interval = frame.intervals.filter { it > 0 }.minOrNull()
-                ?: frame.minContinuousInterval.takeIf { it > 0 }
-                ?: frame.defaultInterval
+            // Resolucion y fps se eligen por separado: lo que no este elegido va automatico
+            val (frame, interval) = info.resolve(choice())
             val committed = negotiate(conn, frame, interval)
 
             val maxFrame = UvcDescriptors.u32(committed, 18)
@@ -184,12 +186,12 @@ class UvcCamera(
             }
             return commit
         }
-        throw CameraException(Problem.FORMAT_REJECTED, "Camera rejected the video format: $lastError")
+        throw CameraException(CameraProblem.FORMAT_REJECTED, "Camera rejected the video format: $lastError")
     }
 
     private fun markStreaming() {
-        if (state != State.STREAMING) {
-            state = State.STREAMING
+        if (state != CameraState.STREAMING) {
+            state = CameraState.STREAMING
             problem = null
         }
     }
@@ -223,8 +225,8 @@ class UvcCamera(
         var framesUntilSample = TRANSFER_SAMPLE_EVERY
         var atFrameBoundary = false
         var sampleStart = 0L
-        state = State.WAITING_FOR_IMAGE
-        while (running) {
+        state = CameraState.WAITING_FOR_IMAGE
+        while (running && !reopen) {
             val sampling = atFrameBoundary && sampleStart == 0L && framesUntilSample <= 0
             val size = if (sampling) packetSize else readSize
             val framesBefore = parser.validFrames
@@ -249,11 +251,11 @@ class UvcCamera(
                 }
                 atFrameBoundary = completed > 0 && n < size
             } else if (now - lastData > STALL_NANOS) {
-                throw CameraException(Problem.STOPPED_SENDING, "Camera stopped sending data")
+                throw CameraException(CameraProblem.STOPPED_SENDING, "Camera stopped sending data")
             }
             val lastGood = if (parser.lastFrameNanos != 0L) parser.lastFrameNanos else started
             if (now - lastGood > STALL_NANOS) {
-                throw CameraException(Problem.INVALID_FRAMES, "Receiving data but no valid frames")
+                throw CameraException(CameraProblem.INVALID_FRAMES, "Receiving data but no valid frames")
             }
             if (now - windowStart >= STATS_NANOS) {
                 // Solo al registro del sistema, para diagnosticar por adb
@@ -273,6 +275,7 @@ class UvcCamera(
             .let { if (it < 0) candidates.lastIndex else it }
         var bandwidthRefused = false
         var lastFailure = ""
+        val error = IntArray(1)
         for (i in first downTo 0) {
             if (!running) return
             val ep = candidates[i]
@@ -283,10 +286,11 @@ class UvcCamera(
                 Log.w(TAG, "${device.productName}: $lastFailure")
                 continue
             }
-            val handle = IsoUsb.open(conn.fileDescriptor, ep.address, ep.effectivePacketSize, PACKETS_PER_URB, URB_COUNT)
-            if (handle <= 0L) {
-                if (handle == -ENOSPC.toLong()) bandwidthRefused = true
-                lastFailure = "alt ${ep.altSetting} (${ep.effectivePacketSize} B): errno ${-handle}"
+            error[0] = 0
+            val handle = IsoUsb.open(conn.fileDescriptor, ep.address, ep.effectivePacketSize, PACKETS_PER_URB, URB_COUNT, error)
+            if (handle == 0L) {
+                if (error[0] == ENOSPC) bandwidthRefused = true
+                lastFailure = "alt ${ep.altSetting} (${ep.effectivePacketSize} B): errno ${error[0]}"
                 Log.w(TAG, "${device.productName}: $lastFailure")
                 continue
             }
@@ -300,7 +304,7 @@ class UvcCamera(
             return
         }
         throw CameraException(
-            if (bandwidthRefused) Problem.NO_BANDWIDTH else Problem.ISO_FAILED,
+            if (bandwidthRefused) CameraProblem.NO_BANDWIDTH else CameraProblem.ISO_FAILED,
             "Could not start isochronous video: $lastFailure",
         )
     }
@@ -328,12 +332,12 @@ class UvcCamera(
         var lastData = started
         var lastImageBytes = 0L
         var windowStart = started
-        state = State.WAITING_FOR_IMAGE
-        while (running) {
+        state = CameraState.WAITING_FOR_IMAGE
+        while (running && !reopen) {
             val n = IsoUsb.read(handle, data, lengths, statuses, 100)
             val now = System.nanoTime()
             if (n < 0) {
-                val problem = if (n == -ENODEV) Problem.STOPPED_SENDING else Problem.ISO_FAILED
+                val problem = if (n == -ENODEV) CameraProblem.STOPPED_SENDING else CameraProblem.ISO_FAILED
                 throw CameraException(problem, "Isochronous read failed (errno ${-n})")
             }
             if (n > 0) {
@@ -351,11 +355,11 @@ class UvcCamera(
                 lastImageBytes = assembler.imageBytes
                 lastData = now
             } else if (now - lastData > STALL_NANOS) {
-                throw CameraException(Problem.STOPPED_SENDING, "Camera stopped sending data")
+                throw CameraException(CameraProblem.STOPPED_SENDING, "Camera stopped sending data")
             }
             val lastGood = if (assembler.lastFrameNanos != 0L) assembler.lastFrameNanos else started
             if (now - lastGood > STALL_NANOS) {
-                throw CameraException(Problem.INVALID_FRAMES, "Receiving data but no valid frames")
+                throw CameraException(CameraProblem.INVALID_FRAMES, "Receiving data but no valid frames")
             }
             if (now - windowStart >= STATS_NANOS) {
                 Log.i(TAG, "${device.productName}: USB: ${stats.summarize(now - windowStart)}")

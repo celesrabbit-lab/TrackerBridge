@@ -35,7 +35,29 @@
     <string name="problem_iso_failed">no se pudo iniciar el video de la webcam</string>
     <string name="problem_stopped">la cámara dejó de enviar imágenes</string>
     <string name="problem_invalid">llegan datos pero no imágenes válidas</string>
+    <string name="problem_serial_setup">no se pudo preparar el puerto serie</string>
+    <string name="problem_not_tracker">este aparato no manda video: no parece un tracker por cable</string>
     <string name="problem_other">error inesperado</string>
+
+    <!-- Modo de video: la resolución y los fps se eligen por separado -->
+    <string name="value_auto">auto</string>
+    <string name="res_button">Resolución: %1$s</string>
+    <string name="fps_button">FPS: %1$s</string>
+    <string name="res_title">%1$s: resolución</string>
+    <string name="fps_title">%1$s: cuadros por segundo</string>
+    <string name="res_auto">Automática (lo más cerca de 240x240)</string>
+    <string name="fps_auto">Automáticos (lo más rápido que ofrezca la cámara)</string>
+    <string name="res_item">%1$d x %2$d</string>
+    <string name="fps_item">%1$d fps</string>
+    <string name="mode_warning">Los cuadros más grandes y más fps gastan más ancho de banda USB, más WiFi y más CPU en la PC. En un hub compartido pueden causar cuadros perdidos, tirones o más latencia, y puede que la cámara no llegue a los fps que promete. Si algo se rompe, vuelve a Automático.</string>
+    <string name="mode_close">Cerrar</string>
+
+    <!-- Aviso de seguridad para las cámaras que no son de ETVR/Babble -->
+    <string name="status_risk">● En espera: falta aceptar el aviso de seguridad</string>
+    <string name="risk_title">Antes de apuntar una cámara DIY a tus ojos</string>
+    <string name="risk_message">Tracker Bridge no puede saber si una cámara USB es segura para apuntarla a tus ojos.\n\nAlgunos módulos DIY traen LEDs infrarrojos demasiado fuertes, o demasiado cerca del ojo, para usarlos todo el tiempo. Las comunidades de EyeTrackVR y Project Babble desaconsejan en especial el módulo IR GC0308 para eye tracking: hay reportes de dolor y sequedad en los ojos, y la exposición prolongada al infrarrojo se asocia con daño en el cristalino con el tiempo.\n\nApunta una cámara a tus ojos solo si sabes que su iluminación es segura para eso, por ejemplo la de los kits oficiales de EyeTrackVR o Project Babble. Una cámara para boca o cara no tiene este problema.\n\nAl continuar confirmas que entiendes el riesgo y que el hardware que uses es tu responsabilidad.</string>
+    <string name="risk_accept">Entiendo el riesgo</string>
+    <string name="risk_decline">Ahora no</string>
 
     <!-- Mensajes -->
     <string name="msg_need_usb_camera_permission">Sin el permiso de cámaras USB, el Quest no deja que la app lea las cámaras. Acéptalo para continuar.</string>
@@ -45,6 +67,16 @@
     <string name="msg_open_failed">No se pudo abrir %1$s: %2$s</string>
     <string name="msg_not_mjpeg">%1$s no es una cámara MJPEG compatible.</string>
     <string name="camera_default_name">Cámara %1$d</string>
+    <string name="serial_default_name">Cámara serie (%1$s)</string>
+
+    <!-- Diagnóstico USB -->
+    <string name="usb_devices_title">Otros aparatos USB que ve el visor:</string>
+    <string name="usb_kind_uvc">cámara USB de video</string>
+    <string name="usb_kind_serial">placa de serie (%1$s)</string>
+    <string name="usb_kind_unknown">no es una cámara (clase USB %1$d)</string>
+    <string name="usb_permission_ok">permiso concedido</string>
+    <string name="usb_permission_missing">falta el permiso USB</string>
+    <string name="msg_service_blocked">El sistema no dejó que el puente arrancara solo. Abre Tracker Bridge y pulsa Iniciar puente.</string>
 
     <!-- Notificación -->
     <string name="notif_channel">Puente de cámaras</string>

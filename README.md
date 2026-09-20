@@ -20,7 +20,9 @@ Cameras (USB) → USB hub → Meta Quest (Tracker Bridge) → WiFi → PC (ETVR 
   window. It also starts by itself when you plug the hub in after a reboot.
 - Lightweight: no video preview on the headset. With three cameras on a Quest 3S it uses about 6.5%
   of one CPU core and ~33 MB of RAM.
-- **New in 0.8.0 (beta):** experimental support for regular USB webcams (see below).
+- Lets you pick the resolution and the frame rate per camera, when the camera offers more than one.
+- **New in 0.9.0 (beta):** regular USB webcams now work (tested on a Quest 3S), a safety notice for
+  DIY cameras, and experimental support for ESP32 boards that stream over a serial port.
 
 ## Tested setup
 
@@ -41,16 +43,32 @@ Other OpenIris-based UVC cameras should work, but they haven't been tested.
 - A USB-C OTG hub if you use more than one camera.
 - The Quest and the PC on the same network (5 GHz or 6 GHz WiFi recommended).
 
-## USB webcams (experimental, 0.8.0 beta)
+## Safety notice for DIY cameras
+
+The app cannot tell whether a camera is safe to point at your eyes, so the first time you plug in a
+camera that isn't an ETVR/Babble board, it asks you to accept a safety notice before it reads it.
+
+Some DIY camera modules come with infrared LEDs that are too strong, or too close to the eye, for
+continuous use. The EyeTrackVR and Project Babble communities advise against the **GC0308 IR module**
+for eye tracking in particular: users report eye pain and dryness, and long infrared exposure is
+linked to lens damage over time. Only point a camera at your eyes if you know its illumination is
+safe for that, such as the official EyeTrackVR or Project Babble builds. A camera used for mouth or
+face tracking doesn't have this problem.
+
+## USB webcams (experimental)
 
 Most regular USB webcams send video with *isochronous* USB transfers, which Android's Java USB API
-can't read. Since 0.8.0, Tracker Bridge reads them with a small native library. This hasn't been
-tested with a real webcam yet, so reports are very welcome.
+can't read. Since 0.8.0, Tracker Bridge reads them with a small native library, and since 0.9.0 this
+works on real hardware: tested on a Quest 3S with a Sunplus `1bcf:28c4` webcam at 320x240 and
+640x480, MJPEG, with no dropped frames.
 
 - The webcam must support **MJPEG** (most 720p and 1080p webcams do; some very cheap 480p ones only
   send uncompressed video, which isn't supported).
 - The app picks the MJPEG resolution closest to 240x240 at the highest frame rate the camera offers
-  (for example, 320x240 at 120 fps on the HBVCAM GC0308 module).
+  (for example, 320x240 at 120 fps on the HBVCAM GC0308 module). You can override both from the app,
+  see **Resolution and frame rate** below.
+- A webcam's own auto-exposure can cap its frame rate: in a dim room the tested webcam settled at
+  16.7 fps (60 ms per frame) and went up to 20 fps with more light, even though it had negotiated 30.
 - Webcams show an extra status line with the video mode and USB mode, or the technical detail of the
   last error. OpenIris cameras (ETVR, Babble) keep working exactly as before.
 - Two webcams on the same USB 2.0 hub may not fit if both ask for a lot of bandwidth. The app tries
@@ -62,6 +80,28 @@ If a webcam doesn't work, please open an issue with:
    [USB Device Tree Viewer](https://www.uwe-sieber.de/usbtreeview_e.html), select the camera's
    **device entry** (usually "USB Composite Device", one level above "USB Camera"), and copy all the
    text from the right panel.
+
+## Serial boards: ESP32-CAM and other ESP32 without native USB (experimental)
+
+Boards built on the classic ESP32 (ESP32-WROOM-32, like the AI-Thinker ESP32-CAM) have no native
+USB: OpenIris sends the video as JPEG frames over a serial port, through the board's USB-serial chip,
+and on a PC you would pick a COM port in ETVR or Babble. Since 0.9.0 Tracker Bridge reads those
+boards too and republishes them as an MJPEG URL, so the PC side is the same as any other camera.
+
+This has **not been tested on real hardware** — nobody involved owns one of these boards — so please
+report what happens, good or bad.
+
+- Supported chips: **CDC-ACM** (any board that shows up as a standard serial port), **CH340/CH341**,
+  **CP2102/CP2102N** and **FTDI**.
+- The app tries 3,000,000 baud first (what OpenIris uses), then 2,000,000, 1,500,000, 921,600 and
+  115,200, and keeps the first one that produces a valid JPEG. The card shows which one worked.
+- It never writes to the port, and it leaves DTR and RTS off, so it can't reset the board or put it
+  into the bootloader.
+- Frame rate and resolution come from the firmware; there's nothing to pick in the app.
+- Serial is the bottleneck: 3,000,000 baud is about 300 KB/s, so ~10 KB frames cap out around
+  30 fps. A CP2102 tops out at 1,000,000 baud and a CH340 at 2,000,000, which lowers that ceiling.
+- If the device turns out not to send any JPEG at any speed, the app stops retrying and says so on
+  the card instead of hammering the USB port.
 
 ## Pico headsets (experimental)
 
@@ -100,6 +140,21 @@ with the **Language** button.
 3. Plug in the hub with your cameras and accept the USB prompt for each one. Tick **"use by default"**
    if it's offered, so reconnects are automatic.
 4. The app lists every camera with its name, its status and its URL.
+
+## Resolution and frame rate
+
+Each camera card has a **Resolution** and an **FPS** button, and each one appears only when the
+camera actually offers more than one option. They're independent: you can pin the resolution and
+leave the frame rate automatic, or the other way round. "Automatic" means the resolution closest to
+240x240 and the fastest rate that resolution offers, which is what the app has always done.
+
+The list of frame rates follows the resolution you picked, and if you force a rate the camera
+doesn't have, it uses the closest one. The card always shows what ended up applied, like `640x480@30`.
+
+Bigger frames and higher rates use more USB bandwidth, more WiFi and more CPU on the PC, and on a
+shared hub they can cause dropped frames or extra latency. Go back to Automatic if anything breaks.
+OpenIris boards (ETVR, Babble) usually declare a single mode, so neither button shows up for them:
+their frame rate is fixed by the firmware.
 
 ## PC setup
 
@@ -178,6 +233,11 @@ fine for sideloading. The code is shared; each headset's permission and manifest
   64-byte payloads and reads that merge several payloads. Webcams use isochronous endpoints, which the
   native code in `app/src/main/cpp/` reads by sending URBs to the kernel (usbfs) on the same file
   descriptor. Each request holds 8 packets (1 ms on USB 2.0), so a frame waits at most about 1 ms.
+  The handle that native code returns is a pointer, and Android's allocator tags the top byte, so it
+  looks negative as a Java `long`: errors travel in a separate field instead.
+- **Serial:** boards without native USB are read straight from their USB-serial chip (CDC-ACM, CH34x,
+  CP210x or FTDI, each with its own baud-rate registers), looking for `FF D8 FF ... FF D9` in the byte
+  stream exactly like ETVR and Babble do on the PC.
 - **Permission:** on Horizon OS, USB access to video-class devices requires the runtime permission
   `horizonos.permission.USB_CAMERA`, not `android.permission.CAMERA`.
 - **Network:** each camera is an HTTP MJPEG stream (`multipart/x-mixed-replace`) that matches OpenIris'

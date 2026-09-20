@@ -26,6 +26,21 @@ data class UvcStreamingEndpoint(
     val effectivePacketSize: Int get() = maxPacketSize * transactions
 }
 
+/**
+ * Lo que eligio el usuario a mano en la pantalla. Cada parte va por su lado: se puede fijar la
+ * resolucion ("640x480") y dejar los fps en automatico, o al reves. Vacio = automatico.
+ */
+data class VideoChoice(val resolution: String = "", val fps: String = "")
+
+/** Una resolucion con una velocidad, de las que declara la camara. */
+data class VideoMode(val width: Int, val height: Int, val fps: Int, val frameIndex: Int, val interval: Int) {
+    /** Como se guarda en las preferencias y se compara: "320x240". */
+    val resolutionKey: String get() = "${width}x$height"
+
+    /** Resolucion y velocidad juntas, para el registro y las pruebas: "320x240@30". */
+    val key: String get() = "$resolutionKey@$fps"
+}
+
 data class UvcInfo(
     val bcdUvc: Int,
     val controlInterfaceId: Int,
@@ -52,6 +67,40 @@ data class UvcInfo(
     fun isoEndpointFor(maxPayload: Int): UvcStreamingEndpoint? {
         val iso = isoEndpoints()
         return iso.firstOrNull { it.effectivePacketSize >= maxPayload } ?: iso.lastOrNull()
+    }
+
+    /** Todo lo que ofrece la camara: cada resolucion MJPEG con cada velocidad que declara. */
+    fun videoModes(): List<VideoMode> = mjpegFrames.flatMap { f ->
+        val intervals = f.intervals.filter { it > 0 }.ifEmpty {
+            listOfNotNull(
+                f.minContinuousInterval.takeIf { it > 0 },
+                f.defaultInterval.takeIf { it > 0 },
+            )
+        }
+        intervals.distinct().map { VideoMode(f.width, f.height, 10_000_000 / it, f.index, it) }
+    }.distinctBy { it.key }.sortedWith(compareBy({ it.width * it.height }, { it.fps }))
+
+    /**
+     * El cuadro y el intervalo que hay que pedirle a la camara para lo que eligio el usuario. Cada
+     * parte de [choice] puede estar vacia (automatica): la resolucion automatica es la mas parecida a
+     * 240x240 y la velocidad automatica es la mas alta que ofrezca esa resolucion. Si la camara no
+     * tiene lo que se pidio, se queda con lo mas parecido.
+     */
+    fun resolve(choice: VideoChoice): Pair<UvcFrameDesc, Int> {
+        val frame = choice.resolution.takeIf { it.isNotEmpty() }
+            ?.let { res -> mjpegFrames.firstOrNull { "${it.width}x${it.height}" == res } }
+            ?: frameClosestTo240()
+        val available = frame.intervals.filter { it > 0 }.ifEmpty {
+            listOfNotNull(
+                frame.minContinuousInterval.takeIf { it > 0 },
+                frame.defaultInterval.takeIf { it > 0 },
+            )
+        }
+        val wantedFps = choice.fps.toIntOrNull()
+        val interval = wantedFps?.let { fps -> available.minByOrNull { abs(10_000_000 / it - fps) } }
+            ?: available.minOrNull()
+            ?: frame.defaultInterval
+        return frame to interval
     }
 
     /** La resolucion MJPEG mas parecida a 240x240, la de las placas OpenIris que usan ETVR y Babble. */

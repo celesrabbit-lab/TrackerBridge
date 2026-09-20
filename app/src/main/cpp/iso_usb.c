@@ -110,15 +110,28 @@ static void stream_free(iso_stream *s, int pending) {
     free(s);
 }
 
+// El handle es un puntero, y en Android el heap le pone una etiqueta en los bits altos: como Long
+// de Java se ve negativo. Por eso el error va aparte y el handle 0 es el unico valor que significa
+// que fallo.
+static jlong fail(JNIEnv *env, jintArray error, int err) {
+    jint value = (jint) err;
+    if (error != NULL && (*env)->GetArrayLength(env, error) > 0) {
+        (*env)->SetIntArrayRegion(env, error, 0, 1, &value);
+    }
+    return 0;
+}
+
 JNIEXPORT jlong JNICALL
 Java_dev_rabbit_trackerbridge_IsoUsb_open(JNIEnv *env, jclass clazz, jint fd, jint endpoint,
-                                          jint packet_size, jint packets_per_urb, jint urb_count) {
-    (void) env;
+                                          jint packet_size, jint packets_per_urb, jint urb_count,
+                                          jintArray error) {
     (void) clazz;
-    if (fd < 0 || packet_size <= 0 || packets_per_urb <= 0 || urb_count <= 0) return -EINVAL;
+    if (fd < 0 || packet_size <= 0 || packets_per_urb <= 0 || urb_count <= 0) {
+        return fail(env, error, EINVAL);
+    }
 
     iso_stream *s = calloc(1, sizeof(iso_stream));
-    if (s == NULL) return -ENOMEM;
+    if (s == NULL) return fail(env, error, ENOMEM);
     s->fd = fd;
     s->packet_size = packet_size;
     s->packets_per_urb = packets_per_urb;
@@ -129,20 +142,20 @@ Java_dev_rabbit_trackerbridge_IsoUsb_open(JNIEnv *env, jclass clazz, jint fd, ji
     s->statuses = calloc((size_t) packets_per_urb, sizeof(jint));
     if (s->urbs == NULL || s->in_flight == NULL || s->lengths == NULL || s->statuses == NULL) {
         stream_free(s, 0);
-        return -ENOMEM;
+        return fail(env, error, ENOMEM);
     }
 
     for (int i = 0; i < urb_count; i++) {
         s->urbs[i] = urb_alloc(endpoint, packet_size, packets_per_urb);
         if (s->urbs[i] == NULL) {
             stream_free(s, stream_cancel(s));
-            return -ENOMEM;
+            return fail(env, error, ENOMEM);
         }
         urb_reset(s->urbs[i], packet_size, packets_per_urb);
         if (ioctl(fd, USBDEVFS_SUBMITURB, s->urbs[i]) < 0) {
             int err = errno;
             stream_free(s, stream_cancel(s));
-            return -err;
+            return fail(env, error, err);
         }
         s->in_flight[i] = 1;
     }

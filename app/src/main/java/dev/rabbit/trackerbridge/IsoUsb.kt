@@ -14,10 +14,12 @@ internal object IsoUsb {
 
     /**
      * Envia [urbCount] pedidos de [packetsPerUrb] paquetes de [packetSize] bytes al endpoint isocrono.
-     * Devuelve un handle positivo, o -errno si fallo.
+     * Devuelve el handle, o 0 si fallo dejando el errno en [error]. Ojo: el handle es un puntero y en
+     * Android suele verse negativo (el heap le pone una etiqueta en los bits altos), asi que el unico
+     * valor que significa error es 0.
      */
     @JvmStatic
-    external fun open(fd: Int, endpoint: Int, packetSize: Int, packetsPerUrb: Int, urbCount: Int): Long
+    external fun open(fd: Int, endpoint: Int, packetSize: Int, packetsPerUrb: Int, urbCount: Int, error: IntArray): Long
 
     /**
      * Espera hasta [timeoutMs] a que termine un pedido y lo vuelve a enviar. Copia sus paquetes uno tras

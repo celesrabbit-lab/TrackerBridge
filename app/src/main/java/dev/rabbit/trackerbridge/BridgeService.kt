@@ -56,7 +56,16 @@ class BridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startInForeground()
+        try {
+            startInForeground()
+        } catch (e: Exception) {
+            // Android 12+ puede negar el primer plano si el arranque vino del fondo. Rendirse en
+            // silencio es mejor que cerrar la app: al abrirla, el puente arranca igual.
+            Log.w(TAG, "Could not start in the foreground", e)
+            Bridge.message = UiMessage(R.string.msg_service_blocked)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (!setupDone) {
             setupDone = true
             val filter = IntentFilter().apply {
@@ -151,7 +160,12 @@ class BridgeService : Service() {
 
     private fun scanDevices() {
         detachMissing()
-        usbManager.deviceList.values.forEach { onAttached(it) }
+        val devices = usbManager.deviceList.values
+        // Todo lo que ve el sistema, para diagnosticar con un registro cuando algo no aparece
+        Log.i(TAG, "USB devices: " + devices.joinToString(", ") {
+            "%04x:%04x %s".format(it.vendorId, it.productId, it.productName ?: it.deviceName)
+        }.ifEmpty { "none" })
+        devices.forEach { onAttached(it) }
     }
 
     /** Por si se perdio un aviso de desconexion: suelta las camaras que ya no estan conectadas. */
@@ -185,7 +199,8 @@ class BridgeService : Service() {
     }
 
     private fun onAttached(device: UsbDevice) {
-        if (!device.isVideoDevice()) return
+        val video = device.isVideoDevice()
+        if (!video && !device.isSerialDevice()) return
         if (Bridge.slotForDevice(device.deviceName)?.camera != null) return
 
         if (!usbManager.hasPermission(device)) {
@@ -208,24 +223,39 @@ class BridgeService : Service() {
             Bridge.message = UiMessage(R.string.msg_open_failed, label, e.message ?: e.javaClass.simpleName)
             return
         }
-        val info = UvcDescriptors.parse(raw)
-        if (info == null) {
+        // Descriptores crudos en el registro: permiten armar pruebas con camaras que no tenemos a mano
+        Log.i(TAG, "USB descriptors of '$label': ${raw?.joinToString("") { "%02x".format(it) }}")
+
+        // Las camaras USB de video se leen con UVC; las placas ESP32 sin USB nativo, por puerto serie
+        val info = if (video) UvcDescriptors.parse(raw) else null
+        if (video && info == null) {
             Bridge.message = UiMessage(R.string.msg_not_mjpeg, label)
             return
         }
-        // Descriptores crudos en el registro: permiten armar pruebas con camaras que no tenemos a mano
-        Log.i(TAG, "USB descriptors of '$label': ${raw?.joinToString("") { "%02x".format(it) }}")
 
         val serial = try {
             device.serialNumber
         } catch (_: SecurityException) {
             null
         }
+        val serialKind = if (video) null else UsbSerial.kindOf(device)
         val name = device.productName?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: serialKind?.let { getString(R.string.serial_default_name, it.label) }
             ?: getString(R.string.camera_default_name, device.deviceId)
         val baseKey = if (!serial.isNullOrBlank() && serial != DEFAULT_SERIAL) "sn:$serial" else "name:$name"
         detachMissing()
         val slot = Bridge.slotFor(this, baseKey, name)
+
+        // Las camaras de ETVR/Babble usan un endpoint bulk; cualquier otra (webcam, modulo DIY) espera
+        // a que el usuario acepte el aviso de seguridad antes de encenderse.
+        // Solo las webcams normales (video USB sin endpoint bulk) esperan el aviso de seguridad:
+        // las placas de ETVR/Babble, por USB o por serie, son las de siempre
+        slot.blockedByRisk = info != null && info.bulkEndpoint() == null && !Bridge.loadRiskAccepted(this)
+        if (slot.blockedByRisk) {
+            Log.i(TAG, "Camera '$name' is waiting for the safety notice to be accepted")
+            updateLocks()
+            return
+        }
 
         if (!slot.server.isRunning) {
             try {
@@ -237,11 +267,16 @@ class BridgeService : Service() {
             }
         }
 
-        val camera = UvcCamera(usbManager, device, info, slot.frames)
+        slot.modes = info?.videoModes().orEmpty()
+        val camera: TrackerCamera = if (info != null) {
+            UvcCamera(usbManager, device, info, slot.frames) { slot.choice() }
+        } else {
+            SerialCamera(usbManager, device, slot.frames)
+        }
         slot.attach(device.deviceName, camera)
         camera.start()
         updateLocks()
-        Log.i(TAG, "Camera '$name' ($baseKey) on port ${slot.port}")
+        Log.i(TAG, "Camera '$name' ($baseKey) on port ${slot.port}, ${serialKind?.label ?: "UVC"}")
     }
 
     private fun onDetached(device: UsbDevice) {

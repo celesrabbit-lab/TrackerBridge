@@ -10,6 +10,12 @@ import java.util.concurrent.ConcurrentHashMap
 fun UsbDevice.isVideoDevice(): Boolean =
     (0 until interfaceCount).any { getInterface(it).interfaceClass == UsbConstants.USB_CLASS_VIDEO }
 
+/** Placas sin USB nativo (ESP32-CAM y demas): el video llega por un chip USB-serie. */
+fun UsbDevice.isSerialDevice(): Boolean = UsbSerial.find(this) != null
+
+/** Todo lo que la app puede intentar leer como camara. */
+fun UsbDevice.isTrackerCandidate(): Boolean = isVideoDevice() || isSerialDevice()
+
 /** Mensaje para la pantalla: guarda el texto como recurso y se traduce al mostrarse. */
 class UiMessage(val res: Int, vararg val args: Any)
 
@@ -18,13 +24,35 @@ class CameraSlot(val key: String, @Volatile var name: String, val port: Int) {
     val frames = FrameBuffer()
     val server = MjpegServer(port, frames)
 
-    @Volatile var camera: UvcCamera? = null
+    @Volatile var camera: TrackerCamera? = null
         private set
     @Volatile var deviceName: String? = null
         private set
     @Volatile var serverFailed = false
 
-    fun attach(usbDeviceName: String, cam: UvcCamera) {
+    /** Webcam o modulo DIY en espera de que el usuario acepte el aviso de seguridad. */
+    @Volatile var blockedByRisk = false
+
+    /** Modos de video que ofrece la camara, para elegirlos en la pantalla. */
+    @Volatile var modes: List<VideoMode> = emptyList()
+
+    /** Resolucion elegida a mano ("640x480"), o vacia para la automatica. */
+    @Volatile var wantedResolution: String = ""
+
+    /** Velocidad elegida a mano ("30"), o vacia para la automatica. */
+    @Volatile var wantedFps: String = ""
+
+    fun choice() = VideoChoice(wantedResolution, wantedFps)
+
+    /** Las velocidades que ofrece la camara con la resolucion elegida, de mayor a menor. */
+    fun fpsOptions(): List<Int> = modes
+        .filter { wantedResolution.isEmpty() || it.resolutionKey == wantedResolution }
+        .map { it.fps }.distinct().sortedDescending()
+
+    /** Las resoluciones que ofrece la camara, de la mas chica a la mas grande. */
+    fun resolutionOptions(): List<VideoMode> = modes.distinctBy { it.resolutionKey }
+
+    fun attach(usbDeviceName: String, cam: TrackerCamera) {
         deviceName = usbDeviceName
         camera = cam
     }
@@ -47,6 +75,38 @@ object Bridge {
     /** Dispositivos rechazados: no se vuelven a pedir solos para no entrar en bucle. */
     val deniedDevices: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
+    /**
+     * El usuario acepto el aviso de seguridad de las camaras que no son de ETVR/Babble. La app no
+     * puede saber si una webcam o un modulo DIY es seguro para apuntarlo a los ojos, asi que no las
+     * lee hasta que alguien lo acepte a proposito.
+     */
+    @Volatile var riskAccepted = false
+
+    fun loadRiskAccepted(context: Context): Boolean {
+        riskAccepted = context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).getBoolean(RISK_KEY, false)
+        return riskAccepted
+    }
+
+    fun loadChoice(context: Context, key: String): VideoChoice {
+        val prefs = context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
+        return VideoChoice(
+            prefs.getString(RESOLUTION_KEY + key, "").orEmpty(),
+            prefs.getString(FPS_KEY + key, "").orEmpty(),
+        )
+    }
+
+    fun saveChoice(context: Context, key: String, choice: VideoChoice) {
+        context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).edit()
+            .putString(RESOLUTION_KEY + key, choice.resolution)
+            .putString(FPS_KEY + key, choice.fps)
+            .apply()
+    }
+
+    fun acceptRisk(context: Context) {
+        context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).edit().putBoolean(RISK_KEY, true).apply()
+        riskAccepted = true
+    }
+
     private val slots = LinkedHashMap<String, CameraSlot>()
 
     fun snapshot(): List<CameraSlot> = synchronized(this) { slots.values.toList() }
@@ -68,6 +128,9 @@ object Bridge {
             return it
         }
         val slot = CameraSlot(key, name, assignPort(context, key, name))
+        val choice = loadChoice(context, key)
+        slot.wantedResolution = choice.resolution
+        slot.wantedFps = choice.fps
         slots[key] = slot
         slot
     }
@@ -79,6 +142,11 @@ object Bridge {
         }
         slots.clear()
     }
+
+    private const val SETTINGS = "settings"
+    private const val RISK_KEY = "diy_camera_risk_accepted"
+    private const val RESOLUTION_KEY = "resolution:"
+    private const val FPS_KEY = "fps:"
 
     private fun assignPort(context: Context, key: String, name: String): Int {
         val prefs = context.getSharedPreferences("ports", Context.MODE_PRIVATE)

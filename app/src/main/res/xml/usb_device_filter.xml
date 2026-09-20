@@ -4,4 +4,10 @@
     <usb-device vendor-id="12346" />
     <!-- Cualquier camara USB (clase video) -->
     <usb-device class="14" />
+    <!-- Chips USB-serie de las placas sin USB nativo: CH34x, CP210x y FTDI -->
+    <usb-device vendor-id="6790" />
+    <usb-device vendor-id="4292" />
+    <usb-device vendor-id="1027" />
+    <!-- Puerto serie estandar (CDC-ACM) -->
+    <usb-device class="2" subclass="2" />
 </resources>

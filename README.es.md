@@ -19,16 +19,32 @@ Cámaras (USB) → hub → Meta Quest (Tracker Bridge) → WiFi → PC (ETVR / B
 - Hub USB-C OTG (probado con un hub genérico de 4 puertos).
 - Quest y PC en la misma red.
 
-## Webcams USB (experimental, 0.8.0 beta)
+## Aviso de seguridad para cámaras DIY
+
+La app no puede saber si una cámara es segura para apuntarla a los ojos, así que la primera vez que
+conectas una que no es una placa de ETVR/Babble, te pide aceptar un aviso antes de leerla.
+
+Algunos módulos DIY traen LEDs infrarrojos demasiado fuertes, o demasiado cerca del ojo, para usarlos
+todo el tiempo. Las comunidades de EyeTrackVR y Project Babble desaconsejan en especial el **módulo IR
+GC0308** para eye tracking: hay reportes de dolor y sequedad en los ojos, y la exposición prolongada al
+infrarrojo se asocia con daño en el cristalino con el tiempo. Apunta una cámara a tus ojos solo si sabes
+que su iluminación es segura para eso, por ejemplo la de los kits oficiales de EyeTrackVR o Project
+Babble. Una cámara para boca o cara no tiene este problema.
+
+## Webcams USB (experimental)
 
 La mayoría de las webcams USB comunes mandan el video con transferencias USB *isócronas*, que la API
 USB de Android en Java no puede leer. Desde la 0.8.0, Tracker Bridge las lee con una pequeña librería
-nativa. Todavía no se ha probado con una webcam real, así que los reportes son muy bienvenidos.
+nativa, y desde la 0.9.0 funciona en hardware real: probado en un Quest 3S con una webcam Sunplus
+`1bcf:28c4` a 320x240 y 640x480, en MJPEG y sin perder cuadros.
 
 - La webcam tiene que soportar **MJPEG** (casi todas las de 720p y 1080p lo hacen; algunas muy baratas
   de 480p solo mandan video sin comprimir, y esas no funcionan).
 - La app elige la resolución MJPEG más parecida a 240x240, con los fps más altos que ofrezca la cámara
-  (por ejemplo, 320x240 a 120 fps en el módulo HBVCAM GC0308).
+  (por ejemplo, 320x240 a 120 fps en el módulo HBVCAM GC0308). Puedes cambiar las dos cosas desde la
+  app: mira **Resolución y fps** más abajo.
+- El autoexposición de la webcam puede limitar los fps: con poca luz, la webcam de prueba se quedó en
+  16,7 fps (60 ms por cuadro) y subió a 20 fps con más luz, aunque había negociado 30.
 - Las webcams muestran una línea extra de estado con el modo de video y el modo USB, o el detalle
   técnico del último error. Las cámaras OpenIris (ETVR, Babble) siguen funcionando exactamente igual.
 - Dos webcams en el mismo hub USB 2.0 pueden no caber si las dos piden mucho ancho de banda. Si el visor
@@ -40,6 +56,31 @@ Si una webcam no funciona, abre un issue con:
    [USB Device Tree Viewer](https://www.uwe-sieber.de/usbtreeview_e.html), selecciona la **entrada del
    dispositivo** (normalmente "USB Composite Device", un nivel arriba de "USB Camera") y copia todo el
    texto del panel derecho.
+
+## Placas de serie: ESP32-CAM y otros ESP32 sin USB nativo (experimental)
+
+Las placas con el ESP32 clásico (ESP32-WROOM-32, como la ESP32-CAM de AI-Thinker) no tienen USB
+nativo: OpenIris manda el video como cuadros JPEG por un puerto serie, a través del chip USB-serie de
+la placa, y en la PC elegirías un puerto COM en ETVR o Babble. Desde la 0.9.0, Tracker Bridge también
+lee esas placas y las publica como una dirección MJPEG, así que del lado de la PC es igual que
+cualquier otra cámara.
+
+Esto **no se ha probado en hardware real** (nadie del proyecto tiene una de esas placas), así que
+cuenta qué pasó, salga bien o mal.
+
+- Chips soportados: **CDC-ACM** (cualquier placa que aparezca como puerto serie estándar),
+  **CH340/CH341**, **CP2102/CP2102N** y **FTDI**.
+- La app prueba primero 3.000.000 baudios (los que usa OpenIris), y después 2.000.000, 1.500.000,
+  921.600 y 115.200, y se queda con la primera velocidad que dé un JPEG válido. La tarjeta muestra
+  cuál funcionó.
+- Nunca le escribe nada a la placa, y deja DTR y RTS apagados, así que no puede reiniciarla ni
+  meterla en el gestor de arranque.
+- Los fps y la resolución los fija el firmware; no hay nada que elegir en la app.
+- El cuello de botella es el cable: 3.000.000 baudios son unos 300 KB/s, así que con cuadros de
+  10 KB el techo ronda los 30 fps. Un CP2102 llega a 1.000.000 baudios y un CH340 a 2.000.000, lo
+  que baja ese techo.
+- Si el aparato no manda ningún JPEG con ninguna velocidad, la app deja de insistir y lo dice en la
+  tarjeta, en vez de estar molestando al USB.
 
 ## Visores Pico (experimental)
 
@@ -77,6 +118,21 @@ La app está en inglés y en español. Usa el idioma del Quest, y puedes cambiar
 2. Acepta el permiso de **cámaras USB** (Horizon OS lo exige para leer cámaras USB).
 3. Conecta el hub con las cámaras y acepta el aviso USB de cada una, marcando **"usar siempre"**.
 4. La app muestra cada cámara con su nombre, su dirección y si está conectada.
+
+## Resolución y fps
+
+Cada tarjeta de cámara tiene un botón de **Resolución** y otro de **FPS**, y cada uno aparece solo si
+la cámara ofrece más de una opción. Son independientes: puedes fijar la resolución y dejar los fps en
+automático, o al revés. "Automático" es la resolución más parecida a 240x240 y la velocidad más alta
+que ofrezca esa resolución, que es lo que la app hizo siempre.
+
+La lista de fps sigue a la resolución elegida, y si fuerzas una velocidad que la cámara no tiene, usa
+la más parecida. La tarjeta siempre muestra lo que quedó aplicado, tipo `640x480@30`.
+
+Los cuadros más grandes y más fps gastan más ancho de banda USB, más WiFi y más CPU en la PC, y en un
+hub compartido pueden causar cuadros perdidos o más latencia. Si algo se rompe, vuelve a Automático.
+Las placas OpenIris (ETVR, Babble) suelen declarar un solo modo, así que no muestran ninguno de los
+dos botones: sus fps los fija el firmware.
 
 ## Direcciones en la PC
 
@@ -153,7 +209,11 @@ visor están en `app/src/quest/` y `app/src/pico/`.
   para seguir funcionando en segundo plano mientras juegas. Las placas OpenIris usan un endpoint bulk;
   las webcams usan endpoints isócronos, que lee el código nativo de `app/src/main/cpp/` enviando pedidos
   (URB) al kernel (usbfs). Cada pedido junta 8 paquetes (1 ms en USB 2.0), así que un cuadro espera 1 ms
-  como mucho.
+  como mucho. Lo que devuelve ese código es un puntero, y el asignador de memoria de Android le pone una
+  etiqueta en los bits altos: como `long` de Java se ve negativo, así que el error viaja aparte.
+- Las placas sin USB nativo se leen directo de su chip USB-serie (CDC-ACM, CH34x, CP210x o FTDI, cada
+  uno con sus registros de velocidad), buscando `FF D8 FF ... FF D9` en el flujo de bytes, igual que
+  hacen ETVR y Babble en la PC.
 - Horizon OS exige el permiso `horizonos.permission.USB_CAMERA` para dar acceso USB a cámaras
   (no `android.permission.CAMERA`).
 - Cada cámara se publica como stream MJPEG por HTTP, con el mismo formato que OpenIris usa por WiFi.

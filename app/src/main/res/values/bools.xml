@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Abrirse sola al conectar una camara. En Quest no interrumpe el juego. -->
+    <bool name="auto_open_default">true</bool>
+    <!-- El interruptor solo hace falta donde abrirse interrumpe el juego -->
+    <bool name="auto_open_toggle_visible">false</bool>
+</resources>

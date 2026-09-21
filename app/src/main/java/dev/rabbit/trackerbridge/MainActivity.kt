@@ -19,6 +19,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -60,6 +61,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Deja la apertura automatica como se eligio (en Pico viene apagada)
+        Bridge.applyAutoOpen(this)
         setContentView(buildLayout())
         ensurePermissionsAndStart()
     }
@@ -408,6 +411,18 @@ class MainActivity : Activity() {
             })
         }
         root.addView(buttons)
+
+        // Solo en los visores donde abrirse al conectar una camara interrumpe el juego (Pico)
+        if (resources.getBoolean(R.bool.auto_open_toggle_visible)) {
+            root.addView(CheckBox(this).apply {
+                setText(R.string.auto_open_label)
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                isChecked = Bridge.autoOpenEnabled(this@MainActivity)
+                setOnCheckedChangeListener { _, checked -> Bridge.setAutoOpen(this@MainActivity, checked) }
+            })
+            root.addView(text(getString(R.string.auto_open_note), 14f, SUBTLE))
+        }
 
         messageText = text("", 16f, YELLOW).also {
             it.setPadding(0, dp(4), 0, dp(8))

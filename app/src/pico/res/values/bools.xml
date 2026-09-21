@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- En Pico, abrir cualquier ventana (aunque sea invisible) saca al usuario del juego -->
+    <bool name="auto_open_default">false</bool>
+    <bool name="auto_open_toggle_visible">true</bool>
+</resources>

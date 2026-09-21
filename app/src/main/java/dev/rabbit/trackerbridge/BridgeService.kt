@@ -225,6 +225,7 @@ class BridgeService : Service() {
         }
         // Descriptores crudos en el registro: permiten armar pruebas con camaras que no tenemos a mano
         Log.i(TAG, "USB descriptors of '$label': ${raw?.joinToString("") { "%02x".format(it) }}")
+        Log.i(TAG, "Android interfaces of '$label': ${device.interfaceSummary()}")
 
         // Las camaras USB de video se leen con UVC; las placas ESP32 sin USB nativo, por puerto serie
         val info = if (video) UvcDescriptors.parse(raw) else null

@@ -69,6 +69,10 @@
     <string name="camera_default_name">Cámara %1$d</string>
     <string name="serial_default_name">Cámara serie (%1$s)</string>
 
+    <!-- Abrirse sola al conectar una cámara (solo Pico) -->
+    <string name="auto_open_label">Abrirse sola al conectar una cámara</string>
+    <string name="auto_open_note">En Pico esto interrumpe el juego que tengas abierto. Si está apagado y una cámara reconectada no vuelve sola, abre Tracker Bridge una vez.</string>
+
     <!-- Diagnóstico USB -->
     <string name="usb_devices_title">Otros aparatos USB que ve el visor:</string>
     <string name="usb_kind_uvc">cámara USB de video</string>

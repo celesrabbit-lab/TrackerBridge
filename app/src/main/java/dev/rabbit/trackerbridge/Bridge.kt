@@ -1,6 +1,8 @@
 package dev.rabbit.trackerbridge
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import java.net.Inet4Address
@@ -15,6 +17,13 @@ fun UsbDevice.isSerialDevice(): Boolean = UsbSerial.find(this) != null
 
 /** Todo lo que la app puede intentar leer como camara. */
 fun UsbDevice.isTrackerCandidate(): Boolean = isVideoDevice() || isSerialDevice()
+
+/** Las interfaces que muestra Android, para el registro: "0/0 c2.2, 1/0 c10.0, 2/0 c14.1, 3/0 c14.2". */
+fun UsbDevice.interfaceSummary(): String =
+    (0 until interfaceCount).joinToString(", ") {
+        val i = getInterface(it)
+        "${i.id}/${i.alternateSetting} c${i.interfaceClass}.${i.interfaceSubclass}"
+    }.ifEmpty { "none" }
 
 /** Mensaje para la pantalla: guarda el texto como recurso y se traduce al mostrarse. */
 class UiMessage(val res: Int, vararg val args: Any)
@@ -102,6 +111,33 @@ object Bridge {
             .apply()
     }
 
+    /**
+     * Abrirse sola al conectar una camara (UsbAttachActivity). En Quest no molesta. En Pico, abrir
+     * cualquier ventana, aunque sea invisible, saca al usuario del juego, asi que ahi viene apagado.
+     */
+    fun autoOpenEnabled(context: Context): Boolean =
+        context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
+            .getBoolean(AUTO_OPEN_KEY, context.resources.getBoolean(R.bool.auto_open_default))
+
+    fun setAutoOpen(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).edit().putBoolean(AUTO_OPEN_KEY, enabled).apply()
+        applyAutoOpen(context)
+    }
+
+    /** Prende o apaga la ventana invisible de "USB conectado" segun lo elegido. */
+    fun applyAutoOpen(context: Context) {
+        val wanted = if (autoOpenEnabled(context)) {
+            PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        }
+        val component = ComponentName(context, UsbAttachActivity::class.java)
+        val pm = context.packageManager
+        if (pm.getComponentEnabledSetting(component) != wanted) {
+            pm.setComponentEnabledSetting(component, wanted, PackageManager.DONT_KILL_APP)
+        }
+    }
+
     fun acceptRisk(context: Context) {
         context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).edit().putBoolean(RISK_KEY, true).apply()
         riskAccepted = true
@@ -147,6 +183,7 @@ object Bridge {
     private const val RISK_KEY = "diy_camera_risk_accepted"
     private const val RESOLUTION_KEY = "resolution:"
     private const val FPS_KEY = "fps:"
+    private const val AUTO_OPEN_KEY = "auto_open_on_plug"
 
     private fun assignPort(context: Context, key: String, name: String): Int {
         val prefs = context.getSharedPreferences("ports", Context.MODE_PRIVATE)

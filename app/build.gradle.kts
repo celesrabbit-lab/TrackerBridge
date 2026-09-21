@@ -41,15 +41,15 @@ android {
     productFlavors {
         create("quest") {
             dimension = "headset"
-            versionCode = 13
-            versionName = "0.9.0-beta.1"
+            versionCode = 14
+            versionName = "0.9.1-beta.1"
         }
         create("pico") {
             dimension = "headset"
             // App separada (dev.rabbit.trackerbridge.pico): se instala junto a la de Quest sin conflictos
             applicationIdSuffix = ".pico"
-            versionCode = 3
-            versionName = "0.3.0-beta.1"
+            versionCode = 4
+            versionName = "0.4.0-beta.1"
         }
     }
 

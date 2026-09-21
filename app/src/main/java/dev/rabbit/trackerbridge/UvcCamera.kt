@@ -78,8 +78,10 @@ class UvcCamera(
             } catch (e: Exception) {
                 if (running) {
                     Log.w(TAG, "${device.productName}: ${e.message}", e)
-                    problem = (e as? CameraException)?.problem ?: CameraProblem.OTHER
-                    if (isochronous) diagnostics = e.message.orEmpty()
+                    val p = (e as? CameraException)?.problem ?: CameraProblem.OTHER
+                    problem = p
+                    // Webcams, o la interfaz de video escondida: el detalle tecnico sirve en una captura
+                    if (isochronous || p == CameraProblem.NO_VIDEO_INTERFACE) diagnostics = e.message.orEmpty()
                 }
             }
             frames.resetStats()
@@ -100,8 +102,10 @@ class UvcCamera(
         val conn = usbManager.openDevice(device)
             ?: throw CameraException(CameraProblem.OPEN_FAILED, "openDevice returned null (missing permission?)")
         val claimed = mutableListOf<UsbInterface>()
-        var bulkEndpoint: UsbEndpoint? = null
-        var isoInterface: UsbInterface? = null
+        // Interfaces reclamadas directo al kernel porque Android no las muestra (visto en Pico)
+        val rawClaimed = mutableListOf<Int>()
+        var bulkIn: BulkIn? = null
+        var usedIso = false
         try {
             val bulk = info.bulkEndpoint()
             if (bulk == null) {
@@ -111,18 +115,28 @@ class UvcCamera(
 
             findInterface(info.controlInterfaceId, 0)?.let { if (conn.claimInterface(it, true)) claimed += it }
             val vs0 = findInterface(info.streamingInterfaceId, 0)
-                ?: throw CameraException(CameraProblem.NO_VIDEO_INTERFACE, "Video streaming interface not found")
-            if (!conn.claimInterface(vs0, true)) {
-                throw CameraException(CameraProblem.CLAIM_FAILED, "Could not claim the video streaming interface")
+            if (vs0 != null) {
+                if (!conn.claimInterface(vs0, true)) {
+                    throw CameraException(CameraProblem.CLAIM_FAILED, "Could not claim the video streaming interface")
+                }
+                claimed += vs0
+            } else {
+                claimHidden(conn)
+                rawClaimed += info.streamingInterfaceId
             }
-            claimed += vs0
 
             if (bulk != null) {
-                val epIface = findInterface(info.streamingInterfaceId, bulk.altSetting) ?: vs0
-                if (bulk.altSetting != 0) conn.setInterface(epIface)
-                bulkEndpoint = (0 until epIface.endpointCount).map { epIface.getEndpoint(it) }
-                    .firstOrNull { it.address == bulk.address && it.direction == UsbConstants.USB_DIR_IN }
-                    ?: throw CameraException(CameraProblem.NO_ENDPOINT, "Video endpoint not found")
+                bulkIn = if (vs0 != null) {
+                    val epIface = findInterface(info.streamingInterfaceId, bulk.altSetting) ?: vs0
+                    if (bulk.altSetting != 0) conn.setInterface(epIface)
+                    val ep = (0 until epIface.endpointCount).map { epIface.getEndpoint(it) }
+                        .firstOrNull { it.address == bulk.address && it.direction == UsbConstants.USB_DIR_IN }
+                        ?: throw CameraException(CameraProblem.NO_ENDPOINT, "Video endpoint not found")
+                    JavaBulkIn(conn, ep)
+                } else {
+                    if (bulk.altSetting != 0) selectAlt(conn, bulk.altSetting)
+                    RawBulkIn(conn.fileDescriptor, bulk.address, bulk.maxPacketSize.coerceAtLeast(64))
+                }
             }
 
             // Resolucion y fps se eligen por separado: lo que no este elegido va automatico
@@ -141,21 +155,79 @@ class UvcCamera(
                 .format(Locale.ROOT, info.bcdUvc, 10_000_000 / interval.coerceAtLeast(1)))
             val nominalNanos = committedInterval * 100L
 
-            if (bulkEndpoint != null) {
-                stream(conn, bulkEndpoint, maxPayload, maxFrame, nominalNanos)
+            val input = bulkIn
+            if (input != null) {
+                // En la tarjeta: que se esta leyendo sin la API de Android, por si hay que diagnosticar
+                if (input is RawBulkIn) diagnostics = "$resolution · direct USB"
+                stream(input, maxPayload, maxFrame, nominalNanos)
             } else {
-                isoInterface = vs0
+                usedIso = true
                 streamIso(conn, maxPayload, maxFrame, nominalNanos)
             }
         } finally {
-            bulkEndpoint?.let {
+            bulkIn?.let {
                 // En modo bulk, CLEAR_FEATURE(ENDPOINT_HALT) le indica a la camara que deje de transmitir
                 conn.controlTransfer(0x02, 0x01, 0, it.address, null, 0, 200)
             }
             // En modo isocrono, volver al alt setting 0 apaga el video y libera el ancho de banda
-            isoInterface?.let { conn.setInterface(it) }
+            if (usedIso) selectAlt(conn, 0)
             claimed.forEach { conn.releaseInterface(it) }
+            rawClaimed.forEach { RawUsb.releaseInterface(conn.fileDescriptor, it) }
             conn.close()
+        }
+    }
+
+    /**
+     * Android no muestra la interfaz de video aunque este en los descriptores (visto en Pico con el
+     * firmware OpenIris-ESPIDF, que en Quest si aparece). Se reclama por numero, directo al kernel y con
+     * el mismo descriptor de archivo. Si tampoco se puede, el error dice que interfaces si muestra
+     * Android, para diagnosticar con una captura.
+     */
+    private fun claimHidden(conn: UsbDeviceConnection) {
+        val id = info.streamingInterfaceId
+        val shown = device.interfaceSummary()
+        if (!RawUsb.available) {
+            throw CameraException(CameraProblem.NO_VIDEO_INTERFACE, "Video interface $id not listed by Android ($shown)")
+        }
+        val err = RawUsb.claimInterface(conn.fileDescriptor, id)
+        if (err != 0) {
+            throw CameraException(
+                CameraProblem.NO_VIDEO_INTERFACE,
+                "Video interface $id not listed by Android ($shown), direct claim failed (errno ${-err})",
+            )
+        }
+        Log.i(TAG, "${device.productName}: Android does not list video interface $id ($shown); claimed it directly")
+    }
+
+    /** Cambia el alt setting de la interfaz de video; directo al kernel si Android no la muestra. */
+    private fun selectAlt(conn: UsbDeviceConnection, alt: Int): Boolean {
+        findInterface(info.streamingInterfaceId, alt)?.let { return conn.setInterface(it) }
+        return RawUsb.available && RawUsb.setInterface(conn.fileDescriptor, info.streamingInterfaceId, alt) == 0
+    }
+
+    /** De donde salen los datos bulk: la API de Android, o usbfs directo si Android no muestra la interfaz. */
+    private interface BulkIn {
+        val address: Int
+        val packetSize: Int
+
+        /** Bytes leidos, o un numero negativo si no llego nada. */
+        fun read(buf: ByteArray, size: Int, timeoutMs: Int): Int
+    }
+
+    private class JavaBulkIn(private val conn: UsbDeviceConnection, private val ep: UsbEndpoint) : BulkIn {
+        override val address: Int get() = ep.address
+        override val packetSize: Int get() = ep.maxPacketSize.coerceAtLeast(64)
+        override fun read(buf: ByteArray, size: Int, timeoutMs: Int) = conn.bulkTransfer(ep, buf, size, timeoutMs)
+    }
+
+    private class RawBulkIn(private val fd: Int, override val address: Int, override val packetSize: Int) : BulkIn {
+        override fun read(buf: ByteArray, size: Int, timeoutMs: Int): Int {
+            val n = RawUsb.bulkRead(fd, address, buf, size, timeoutMs)
+            // Camara desconectada: no tiene sentido seguir preguntando hasta que se agote el tiempo
+            if (n == -RawUsb.ENODEV || n == -RawUsb.ESHUTDOWN) {
+                throw CameraException(CameraProblem.STOPPED_SENDING, "Camera disconnected")
+            }
+            return if (n > 0) n else -1
         }
     }
 
@@ -196,11 +268,11 @@ class UvcCamera(
         }
     }
 
-    private fun stream(conn: UsbDeviceConnection, ep: UsbEndpoint, maxPayload: Int, maxFrame: Int, nominalNanos: Long) {
+    private fun stream(input: BulkIn, maxPayload: Int, maxFrame: Int, nominalNanos: Long) {
         // OpenIris usa payloads de 64 bytes: una llamada USB por payload es demasiado lenta (~30 fps).
         // Con un buffer grande, cada lectura igual termina en el paquete corto del final del cuadro.
-        val readSize = roundUp(maxOf(maxPayload, READ_BUFFER), ep.maxPacketSize.coerceAtLeast(64))
-        val packetSize = ep.maxPacketSize.coerceAtLeast(64)
+        val packetSize = input.packetSize
+        val readSize = roundUp(maxOf(maxPayload, READ_BUFFER), packetSize)
         val readBuf = ByteArray(readSize)
         val stats = StreamStats(nominalNanos, "reads")
         lateinit var parser: UvcPayloadParser
@@ -230,7 +302,7 @@ class UvcCamera(
             val sampling = atFrameBoundary && sampleStart == 0L && framesUntilSample <= 0
             val size = if (sampling) packetSize else readSize
             val framesBefore = parser.validFrames
-            val n = conn.bulkTransfer(ep, readBuf, size, 500)
+            val n = input.read(readBuf, size, 500)
             val now = System.nanoTime()
             if (n > 0) {
                 lastData = now
@@ -279,8 +351,7 @@ class UvcCamera(
         for (i in first downTo 0) {
             if (!running) return
             val ep = candidates[i]
-            val alt = findInterface(info.streamingInterfaceId, ep.altSetting) ?: continue
-            if (!conn.setInterface(alt)) {
+            if (!selectAlt(conn, ep.altSetting)) {
                 bandwidthRefused = true
                 lastFailure = "alt ${ep.altSetting} (${ep.effectivePacketSize} B) refused"
                 Log.w(TAG, "${device.productName}: $lastFailure")

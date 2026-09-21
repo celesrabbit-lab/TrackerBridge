@@ -71,6 +71,10 @@
     <string name="camera_default_name">Camera %1$d</string>
     <string name="serial_default_name">Serial camera (%1$s)</string>
 
+    <!-- Opening by itself when a camera is plugged in (Pico only) -->
+    <string name="auto_open_label">Open by itself when a camera is plugged in</string>
+    <string name="auto_open_note">On Pico this interrupts the game you have open. If it\'s off and a replugged camera doesn\'t come back by itself, open Tracker Bridge once.</string>
+
     <!-- USB diagnostics -->
     <string name="usb_devices_title">Other USB devices the headset sees:</string>
     <string name="usb_kind_uvc">USB video camera</string>

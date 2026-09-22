@@ -7,6 +7,7 @@ import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 fun UsbDevice.isVideoDevice(): Boolean =
@@ -138,6 +139,25 @@ object Bridge {
         }
     }
 
+    /** Salida experimental para otras apps de PC, si esta encendida (la maneja el servicio). */
+    @Volatile var lanBridge: LanBridgeOutput? = null
+
+    fun lanBridgeEnabled(context: Context): Boolean =
+        context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).getBoolean(LAN_BRIDGE_KEY, false)
+
+    fun setLanBridgeEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).edit().putBoolean(LAN_BRIDGE_KEY, enabled).apply()
+    }
+
+    /** Identificador fijo de este visor como bridge: la app de PC lo usa para recordar la fuente elegida. */
+    fun lanBridgeSourceId(context: Context): String {
+        val prefs = context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
+        prefs.getString(LAN_BRIDGE_ID_KEY, null)?.let { return it }
+        val id = UUID.randomUUID().toString()
+        prefs.edit().putString(LAN_BRIDGE_ID_KEY, id).apply()
+        return id
+    }
+
     fun acceptRisk(context: Context) {
         context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).edit().putBoolean(RISK_KEY, true).apply()
         riskAccepted = true
@@ -184,6 +204,8 @@ object Bridge {
     private const val RESOLUTION_KEY = "resolution:"
     private const val FPS_KEY = "fps:"
     private const val AUTO_OPEN_KEY = "auto_open_on_plug"
+    private const val LAN_BRIDGE_KEY = "lan_bridge_output"
+    private const val LAN_BRIDGE_ID_KEY = "lan_bridge_source_id"
 
     private fun assignPort(context: Context, key: String, name: String): Int {
         val prefs = context.getSharedPreferences("ports", Context.MODE_PRIVATE)

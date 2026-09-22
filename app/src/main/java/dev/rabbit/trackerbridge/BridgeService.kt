@@ -89,6 +89,7 @@ class BridgeService : Service() {
                 Bridge.message = null
             }
             scanDevices()
+            updateLanBridge()
         }
         return START_STICKY
     }
@@ -97,6 +98,8 @@ class BridgeService : Service() {
         Bridge.serviceRunning = false
         if (setupDone) unregisterReceiver(usbReceiver)
         worker.post {
+            Bridge.lanBridge?.stop()
+            Bridge.lanBridge = null
             Bridge.clear()
             releaseLocks()
         }
@@ -156,6 +159,18 @@ class BridgeService : Service() {
         wifiLocks.clear()
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
+    }
+
+    /** La salida experimental para otras apps solo existe mientras la opcion esta encendida. */
+    private fun updateLanBridge() {
+        val wanted = Bridge.lanBridgeEnabled(this)
+        val current = Bridge.lanBridge
+        if (wanted && current == null) {
+            Bridge.lanBridge = LanBridgeOutput(this).also { it.start() }
+        } else if (!wanted && current != null) {
+            current.stop()
+            Bridge.lanBridge = null
+        }
     }
 
     private fun scanDevices() {

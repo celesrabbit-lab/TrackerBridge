@@ -75,6 +75,16 @@
     <string name="auto_open_label">Open by itself when a camera is plugged in</string>
     <string name="auto_open_note">On Pico this interrupts the game you have open. If it\'s off and a replugged camera doesn\'t come back by itself, open Tracker Bridge once.</string>
 
+    <!-- Experimental output for other PC apps -->
+    <string name="lan_label">Experimental: output for other PC apps</string>
+    <string name="lan_note">For PC apps that don\'t read the camera URLs. You don\'t need this for ETVR or Babble.</string>
+    <string name="lan_searching">Looking for the PC app on the network…</string>
+    <string name="lan_connected">Sending to %1$s (%2$s)</string>
+    <string name="lan_no_cameras">no camera streaming yet</string>
+    <string name="lan_slot_face">face</string>
+    <string name="lan_slot_left">left eye</string>
+    <string name="lan_slot_right">right eye</string>
+
     <!-- USB diagnostics -->
     <string name="usb_devices_title">Other USB devices the headset sees:</string>
     <string name="usb_kind_uvc">USB video camera</string>

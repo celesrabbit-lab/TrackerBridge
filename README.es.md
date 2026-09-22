@@ -128,6 +128,12 @@ La app está en inglés y en español. Usa el idioma del Quest, y puedes cambiar
 3. Conecta el hub con las cámaras y acepta el aviso USB de cada una, marcando **"usar siempre"**.
 4. La app muestra cada cámara con su nombre, su dirección y si está conectada.
 
+## Salida experimental para otras apps de PC
+
+Algunas apps de PC no leen la dirección de una cámara: esperan que un "bridge" les mande las cámaras por
+la red local. La opción **Experimental: salida para otras apps de PC** hace eso. Viene apagada, no cambia
+las direcciones MJPEG y no hace falta para ETVR ni Babble.
+
 ## Resolución y fps
 
 Cada tarjeta de cámara tiene un botón de **Resolución** y otro de **FPS**, y cada uno aparece solo si

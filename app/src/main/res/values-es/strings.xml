@@ -73,6 +73,16 @@
     <string name="auto_open_label">Abrirse sola al conectar una cámara</string>
     <string name="auto_open_note">En Pico esto interrumpe el juego que tengas abierto. Si está apagado y una cámara reconectada no vuelve sola, abre Tracker Bridge una vez.</string>
 
+    <!-- Salida experimental para otras apps de PC -->
+    <string name="lan_label">Experimental: salida para otras apps de PC</string>
+    <string name="lan_note">Para apps de PC que no leen las direcciones de las cámaras. No hace falta para ETVR ni Babble.</string>
+    <string name="lan_searching">Buscando la app de PC en la red…</string>
+    <string name="lan_connected">Enviando a %1$s (%2$s)</string>
+    <string name="lan_no_cameras">todavía ninguna cámara transmite</string>
+    <string name="lan_slot_face">cara</string>
+    <string name="lan_slot_left">ojo izquierdo</string>
+    <string name="lan_slot_right">ojo derecho</string>
+
     <!-- Diagnóstico USB -->
     <string name="usb_devices_title">Otros aparatos USB que ve el visor:</string>
     <string name="usb_kind_uvc">cámara USB de video</string>

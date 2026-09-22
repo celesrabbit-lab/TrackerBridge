@@ -25,6 +25,7 @@ Cameras (USB) → USB hub → Meta Quest (Tracker Bridge) → WiFi → PC (ETVR 
   DIY cameras, and experimental support for ESP32 boards that stream over a serial port.
 - **New in 0.9.1 (beta):** the Pico build works on real hardware, including a fix for Pico hiding the
   camera's video interface from apps.
+- **New in 0.10.0 (beta):** an experimental output for other PC apps (see below).
 
 ## Tested setup
 
@@ -151,6 +152,12 @@ with the **Language** button.
 3. Plug in the hub with your cameras and accept the USB prompt for each one. Tick **"use by default"**
    if it's offered, so reconnects are automatic.
 4. The app lists every camera with its name, its status and its URL.
+
+## Experimental output for other PC apps
+
+Some PC apps don't read a camera URL: they expect a "bridge" to send them the cameras over the local
+network. The **Experimental: output for other PC apps** option does that. It's off by default, it doesn't
+change the MJPEG URLs, and ETVR and Babble don't need it.
 
 ## Resolution and frame rate
 

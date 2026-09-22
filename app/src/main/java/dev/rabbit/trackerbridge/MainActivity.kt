@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var toggleButton: Button
     private lateinit var emptyText: TextView
     private lateinit var usbText: TextView
+    private lateinit var lanBridgeText: TextView
     private lateinit var cardsContainer: LinearLayout
     private val cards = LinkedHashMap<String, CardViews>()
     private var permissionRequestInFlight = false
@@ -134,6 +135,7 @@ class MainActivity : Activity() {
 
         val slots = Bridge.snapshot()
         showOtherUsbDevices(slots)
+        showLanBridgeState()
         if (slots.map { it.key } != cards.keys.toList()) {
             cardsContainer.removeAllViews()
             cards.clear()
@@ -202,6 +204,29 @@ class MainActivity : Activity() {
             device.productName?.trim().takeUnless { it.isNullOrEmpty() } ?: device.deviceName,
             device.vendorId, device.productId, kind, permission,
         )
+    }
+
+    /** Estado de la salida experimental para otras apps, debajo de su casilla. */
+    private fun showLanBridgeState() {
+        val output = Bridge.lanBridge
+        val pc = output?.pcAddress?.hostAddress
+        lanBridgeText.text = when {
+            output == null -> ""
+            output.state == LanBridgeOutput.State.CONNECTED && pc != null -> {
+                val names = output.activeSlots.map {
+                    getString(
+                        when (it) {
+                            LanBridgeProtocol.Slot.FACE -> R.string.lan_slot_face
+                            LanBridgeProtocol.Slot.LEFT_EYE -> R.string.lan_slot_left
+                            LanBridgeProtocol.Slot.RIGHT_EYE -> R.string.lan_slot_right
+                        }
+                    )
+                }
+                getString(R.string.lan_connected, pc, names.joinToString(", ").ifEmpty { getString(R.string.lan_no_cameras) })
+            }
+            else -> getString(R.string.lan_searching)
+        }
+        lanBridgeText.visibility = if (output == null) View.GONE else View.VISIBLE
     }
 
     /** Pide el permiso USB desde la pantalla (primer plano), de a una camara por vez. */
@@ -422,6 +447,24 @@ class MainActivity : Activity() {
                 setOnCheckedChangeListener { _, checked -> Bridge.setAutoOpen(this@MainActivity, checked) }
             })
             root.addView(text(getString(R.string.auto_open_note), 14f, SUBTLE))
+        }
+
+        // Salida experimental para otras apps de PC, apagada si nadie la enciende
+        root.addView(CheckBox(this).apply {
+            setText(R.string.lan_label)
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            isChecked = Bridge.lanBridgeEnabled(this@MainActivity)
+            setOnCheckedChangeListener { _, checked ->
+                Bridge.setLanBridgeEnabled(this@MainActivity, checked)
+                if (hasCameraPermission()) startBridge(BridgeService.ACTION_SCAN)
+            }
+        })
+        root.addView(text(getString(R.string.lan_note), 14f, SUBTLE))
+        lanBridgeText = text("", 15f, ACCENT).also {
+            it.setPadding(0, dp(4), 0, 0)
+            it.visibility = View.GONE
+            root.addView(it)
         }
 
         messageText = text("", 16f, YELLOW).also {

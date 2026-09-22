@@ -82,16 +82,25 @@ cuenta qué pasó, salga bien o mal.
 - Si el aparato no manda ningún JPEG con ninguna velocidad, la app deja de insistir y lo dice en la
   tarjeta, en vez de estar molestando al USB.
 
-## Visores Pico (experimental)
+## Visores Pico (beta)
 
-Hay una APK aparte para visores Pico, `TrackerBridge-Pico-x.y.z.apk`, en la página de Releases.
-Todavía no se ha probado en un Pico real, así que los reportes son muy bienvenidos: abre un issue con
-el modelo de tu visor y lo que pasó.
+Hay una APK aparte para visores Pico, `TrackerBridge-Pico-x.y.z.apk`, en la misma release que la de
+Quest. Un tester de la comunidad la usó en un Pico con una cámara OpenIris (firmware OpenIris-ESPIDF en
+modo UVC) durante dos horas sin problemas, y con menos latencia que por WiFi. Otros modelos de Pico y
+otras cámaras no se han probado, así que los reportes son muy bienvenidos: abre un issue con el modelo
+de tu visor y lo que pasó.
 
 Diferencias con la versión de Quest:
 - Pide el permiso de **cámara** normal de Android en vez del permiso de cámaras USB de Horizon OS.
   Android lo exige antes de que cualquier app lea una cámara USB; la app nunca usa las cámaras del visor.
 - Se instala como una app separada (`dev.rabbit.trackerbridge.pico`), así que no choca con la versión de Quest.
+- El Android del Pico le esconde a las apps la interfaz de video de la cámara, aunque la cámara la
+  declara. La app la reclama directamente al kernel de Linux (usbfs) por la misma conexión USB.
+- En Pico, cualquier ventana que se abra, aunque sea invisible, te saca de la app VR en la que estés. Por
+  eso la app no se abre sola al conectar una cámara, salvo que marques **Abrirse sola al conectar una
+  cámara**. Si activas la opción del sistema del Pico que deja tener varias apps abiertas a la vez,
+  conectar una cámara no cerrará tu juego en ningún caso. Si una cámara reconectada no vuelve sola, abre
+  Tracker Bridge una vez.
 - El botón de idioma necesita Android 13 o más nuevo. En sistemas anteriores, la app usa el idioma del visor.
 
 ## Instalar la APK

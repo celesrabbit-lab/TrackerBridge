@@ -23,6 +23,8 @@ Cameras (USB) → USB hub → Meta Quest (Tracker Bridge) → WiFi → PC (ETVR 
 - Lets you pick the resolution and the frame rate per camera, when the camera offers more than one.
 - **New in 0.9.0 (beta):** regular USB webcams now work (tested on a Quest 3S), a safety notice for
   DIY cameras, and experimental support for ESP32 boards that stream over a serial port.
+- **New in 0.9.1 (beta):** the Pico build works on real hardware, including a fix for Pico hiding the
+  camera's video interface from apps.
 
 ## Tested setup
 
@@ -103,16 +105,25 @@ report what happens, good or bad.
 - If the device turns out not to send any JPEG at any speed, the app stops retrying and says so on
   the card instead of hammering the USB port.
 
-## Pico headsets (experimental)
+## Pico headsets (beta)
 
-There's a separate APK for Pico headsets, `TrackerBridge-Pico-x.y.z.apk`, on the Releases page. It
-hasn't been tested on a real Pico yet, so reports are very welcome: please open an issue with your
-headset model and what happened.
+There's a separate APK for Pico headsets, `TrackerBridge-Pico-x.y.z.apk`, in the same release as the
+Quest one. A community tester used it on a Pico with an OpenIris camera (the OpenIris-ESPIDF firmware in
+UVC mode) for two hours with no problems, and with lower latency than over WiFi. Other Pico models and
+cameras haven't been tested, so reports are very welcome: please open an issue with your headset model
+and what happened.
 
 Differences from the Quest version:
 - It asks for Android's regular **camera** permission instead of Horizon OS's USB cameras permission.
   Android requires it before any app can read a USB camera; the app never uses the headset's own cameras.
 - It installs as a separate app (`dev.rabbit.trackerbridge.pico`), so it never conflicts with the Quest version.
+- Pico's Android hides the camera's video interface from apps, even though the camera declares it. The
+  app claims it directly through the Linux kernel (usbfs) on the same USB connection.
+- On Pico, any window that opens, even an invisible one, pulls you out of the VR app you're in. So the
+  app doesn't open by itself when you plug a camera in, unless you tick **Open by itself when a camera
+  is plugged in**. If you turn on Pico's system option that lets several apps run at once, plugging a
+  camera in won't close your game either way. If a replugged camera doesn't come back on its own, open
+  Tracker Bridge once.
 - The Language button needs Android 13 or newer. On older systems, the app follows the headset's language.
 
 ## Install

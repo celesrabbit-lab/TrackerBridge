@@ -7,7 +7,6 @@ import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Process
-import android.util.Log
 import java.io.IOException
 import java.util.Locale
 
@@ -77,7 +76,7 @@ class UvcCamera(
                 openAndStream()
             } catch (e: Exception) {
                 if (running) {
-                    Log.w(TAG, "${device.productName}: ${e.message}", e)
+                    AppLog.w(TAG, "${device.productName}: ${e.message}", e)
                     val p = (e as? CameraException)?.problem ?: CameraProblem.OTHER
                     problem = p
                     // Webcams, o la interfaz de video escondida: el detalle tecnico sirve en una captura
@@ -151,7 +150,7 @@ class UvcCamera(
             val committedInterval = UvcDescriptors.u32(committed, 4).takeIf { it > 0 } ?: interval
             val fps = 10_000_000 / committedInterval.coerceAtLeast(1)
             resolution = "${frame.width}x${frame.height}@$fps"
-            Log.i(TAG, "${device.productName}: UVC %04x, $resolution (requested %d fps), payload $maxPayload, frame $maxFrame"
+            AppLog.i(TAG, "${device.productName}: UVC %04x, $resolution (requested %d fps), payload $maxPayload, frame $maxFrame"
                 .format(Locale.ROOT, info.bcdUvc, 10_000_000 / interval.coerceAtLeast(1)))
             val nominalNanos = committedInterval * 100L
 
@@ -196,7 +195,7 @@ class UvcCamera(
                 "Video interface $id not listed by Android ($shown), direct claim failed (errno ${-err})",
             )
         }
-        Log.i(TAG, "${device.productName}: Android does not list video interface $id ($shown); claimed it directly")
+        AppLog.i(TAG, "${device.productName}: Android does not list video interface $id ($shown); claimed it directly")
     }
 
     /** Cambia el alt setting de la interfaz de video; directo al kernel si Android no la muestra. */
@@ -331,7 +330,7 @@ class UvcCamera(
             }
             if (now - windowStart >= STATS_NANOS) {
                 // Solo al registro del sistema, para diagnosticar por adb
-                Log.i(TAG, "${device.productName}: USB: ${stats.summarize(now - windowStart)}")
+                AppLog.i(TAG, "${device.productName}: USB: ${stats.summarize(now - windowStart)}")
                 windowStart = now
             }
         }
@@ -354,7 +353,7 @@ class UvcCamera(
             if (!selectAlt(conn, ep.altSetting)) {
                 bandwidthRefused = true
                 lastFailure = "alt ${ep.altSetting} (${ep.effectivePacketSize} B) refused"
-                Log.w(TAG, "${device.productName}: $lastFailure")
+                AppLog.w(TAG, "${device.productName}: $lastFailure")
                 continue
             }
             error[0] = 0
@@ -362,12 +361,12 @@ class UvcCamera(
             if (handle == 0L) {
                 if (error[0] == ENOSPC) bandwidthRefused = true
                 lastFailure = "alt ${ep.altSetting} (${ep.effectivePacketSize} B): errno ${error[0]}"
-                Log.w(TAG, "${device.productName}: $lastFailure")
+                AppLog.w(TAG, "${device.productName}: $lastFailure")
                 continue
             }
             try {
                 diagnostics = "$resolution · USB alt ${ep.altSetting} (${ep.effectivePacketSize} B)"
-                Log.i(TAG, "${device.productName}: isochronous, $diagnostics, camera asked for $maxPayload B")
+                AppLog.i(TAG, "${device.productName}: isochronous, $diagnostics, camera asked for $maxPayload B")
                 readIso(handle, ep, maxFrame, nominalNanos)
             } finally {
                 IsoUsb.close(handle)
@@ -433,7 +432,7 @@ class UvcCamera(
                 throw CameraException(CameraProblem.INVALID_FRAMES, "Receiving data but no valid frames")
             }
             if (now - windowStart >= STATS_NANOS) {
-                Log.i(TAG, "${device.productName}: USB: ${stats.summarize(now - windowStart)}")
+                AppLog.i(TAG, "${device.productName}: USB: ${stats.summarize(now - windowStart)}")
                 windowStart = now
             }
         }

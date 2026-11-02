@@ -20,7 +20,6 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
-import android.util.Log
 import java.io.IOException
 
 /**
@@ -34,10 +33,19 @@ class BridgeService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val wifiLocks = mutableListOf<WifiManager.WifiLock>()
     private var setupDone = false
+    /** Cuando aparecio cada puerto de arranque de ESP32-S3 (solo lo toca el hilo del USB). */
+    private val bootPhaseSeen = HashMap<String, Long>()
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val device = intent.usbDevice() ?: return
+            if (intent.action != ACTION_USB_PERMISSION) {
+                // Si una camara se reinicia sola (corriente, cable), aca se ve cada vez que se reconecta
+                AppLog.i(TAG, "%s %04x:%04x %s".format(
+                    if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) "Plugged in:" else "Unplugged:",
+                    device.vendorId, device.productId, device.productName ?: device.deviceName,
+                ))
+            }
             when (intent.action) {
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> onAttached(device)
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> onDetached(device)
@@ -61,7 +69,7 @@ class BridgeService : Service() {
         } catch (e: Exception) {
             // Android 12+ puede negar el primer plano si el arranque vino del fondo. Rendirse en
             // silencio es mejor que cerrar la app: al abrirla, el puente arranca igual.
-            Log.w(TAG, "Could not start in the foreground", e)
+            AppLog.w(TAG, "Could not start in the foreground", e)
             Bridge.message = UiMessage(R.string.msg_service_blocked)
             stopSelf()
             return START_NOT_STICKY
@@ -149,7 +157,7 @@ class BridgeService : Service() {
                     wifiLocks += it
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "WifiLock $mode not available", e)
+                AppLog.w(TAG, "WifiLock $mode not available", e)
             }
         }
     }
@@ -177,7 +185,7 @@ class BridgeService : Service() {
         detachMissing()
         val devices = usbManager.deviceList.values
         // Todo lo que ve el sistema, para diagnosticar con un registro cuando algo no aparece
-        Log.i(TAG, "USB devices: " + devices.joinToString(", ") {
+        AppLog.i(TAG, "USB devices: " + devices.joinToString(", ") {
             "%04x:%04x %s".format(it.vendorId, it.productId, it.productName ?: it.deviceName)
         }.ifEmpty { "none" })
         devices.forEach { onAttached(it) }
@@ -186,6 +194,7 @@ class BridgeService : Service() {
     /** Por si se perdio un aviso de desconexion: suelta las camaras que ya no estan conectadas. */
     private fun detachMissing() {
         val present = usbManager.deviceList.keys
+        bootPhaseSeen.keys.retainAll(present)
         Bridge.snapshot().forEach { slot ->
             val name = slot.deviceName
             if (name != null && name !in present) slot.detach()
@@ -200,7 +209,7 @@ class BridgeService : Service() {
         val label = device.productName ?: device.deviceName
         if (granted) {
             Bridge.message = null
-            Log.i(TAG, "USB permission granted for $label")
+            AppLog.i(TAG, "USB permission granted for $label")
         } else {
             Bridge.deniedDevices += device.deviceName
             Bridge.message = if (elapsed < 1500) {
@@ -208,7 +217,7 @@ class BridgeService : Service() {
             } else {
                 UiMessage(R.string.msg_usb_denied, label)
             }
-            Log.w(TAG, "USB permission denied for $label after $elapsed ms")
+            AppLog.w(TAG, "USB permission denied for $label after $elapsed ms")
         }
         scanDevices()
     }
@@ -217,6 +226,7 @@ class BridgeService : Service() {
         val video = device.isVideoDevice()
         if (!video && !device.isSerialDevice()) return
         if (Bridge.slotForDevice(device.deviceName)?.camera != null) return
+        if (waitForBootPhase(device)) return
 
         if (!usbManager.hasPermission(device)) {
             if (checkSelfPermission(USB_CAMERA_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
@@ -239,8 +249,8 @@ class BridgeService : Service() {
             return
         }
         // Descriptores crudos en el registro: permiten armar pruebas con camaras que no tenemos a mano
-        Log.i(TAG, "USB descriptors of '$label': ${raw?.joinToString("") { "%02x".format(it) }}")
-        Log.i(TAG, "Android interfaces of '$label': ${device.interfaceSummary()}")
+        AppLog.i(TAG, "USB descriptors of '$label': ${raw?.joinToString("") { "%02x".format(it) }}")
+        AppLog.i(TAG, "Android interfaces of '$label': ${device.interfaceSummary()}")
 
         // Las camaras USB de video se leen con UVC; las placas ESP32 sin USB nativo, por puerto serie
         val info = if (video) UvcDescriptors.parse(raw) else null
@@ -250,7 +260,7 @@ class BridgeService : Service() {
         }
 
         val serial = try {
-            device.serialNumber
+            device.serialNumber?.let { stableSerial(it) }
         } catch (_: SecurityException) {
             null
         }
@@ -268,7 +278,7 @@ class BridgeService : Service() {
         // las placas de ETVR/Babble, por USB o por serie, son las de siempre
         slot.blockedByRisk = info != null && info.bulkEndpoint() == null && !Bridge.loadRiskAccepted(this)
         if (slot.blockedByRisk) {
-            Log.i(TAG, "Camera '$name' is waiting for the safety notice to be accepted")
+            AppLog.i(TAG, "Camera '$name' is waiting for the safety notice to be accepted")
             updateLocks()
             return
         }
@@ -279,7 +289,7 @@ class BridgeService : Service() {
                 slot.serverFailed = false
             } catch (e: IOException) {
                 slot.serverFailed = true
-                Log.w(TAG, "Could not open port ${slot.port}", e)
+                AppLog.w(TAG, "Could not open port ${slot.port}", e)
             }
         }
 
@@ -292,10 +302,29 @@ class BridgeService : Service() {
         slot.attach(device.deviceName, camera)
         camera.start()
         updateLocks()
-        Log.i(TAG, "Camera '$name' ($baseKey) on port ${slot.port}, ${serialKind?.label ?: "UVC"}")
+        AppLog.i(TAG, "Camera '$name' ($baseKey) on port ${slot.port}, ${serialKind?.label ?: "UVC"}")
+    }
+
+    /**
+     * Un ESP32-S3 con firmware de camara UVC pasa unos segundos por el puerto serie de arranque
+     * (USB JTAG/serial) y despues se reconecta como camara. Si se lo abre como camara serie en ese
+     * momento, aparece una tarjeta de mas y se queda con el puerto. Se espera un poco: si sigue ahi,
+     * es una placa que manda el video por serie de verdad.
+     */
+    private fun waitForBootPhase(device: UsbDevice): Boolean {
+        if (device.vendorId != ESPRESSIF_VID || device.productId != ESP_USB_JTAG_PID) return false
+        val now = SystemClock.elapsedRealtime()
+        val firstSeen = bootPhaseSeen.getOrPut(device.deviceName) { now }
+        val remaining = BOOT_PHASE_MS - (now - firstSeen)
+        if (remaining <= 0) return false
+        worker.postDelayed({
+            usbManager.deviceList[device.deviceName]?.let { onAttached(it) }
+        }, remaining)
+        return true
     }
 
     private fun onDetached(device: UsbDevice) {
+        bootPhaseSeen -= device.deviceName
         if (Bridge.pendingPermission == device.deviceName) Bridge.pendingPermission = null
         Bridge.deniedDevices -= device.deviceName
         Bridge.slotForDevice(device.deviceName)?.detach()
@@ -316,6 +345,11 @@ class BridgeService : Service() {
         private const val NOTIFICATION_ID = 1
         /** Serial por defecto del firmware cuando no puede leer la MAC: no sirve para distinguir camaras. */
         private const val DEFAULT_SERIAL = "12345678"
+        /** Puerto serie de arranque de los ESP32-S3 (USB JTAG/serial debug unit). */
+        private const val ESPRESSIF_VID = 0x303A
+        private const val ESP_USB_JTAG_PID = 0x1001
+        /** Lo que se espera antes de leerlo como camara serie: el arranque dura unos pocos segundos. */
+        private const val BOOT_PHASE_MS = 6_000L
         const val ACTION_USB_PERMISSION = "dev.rabbit.trackerbridge.USB_PERMISSION"
         const val ACTION_START = "dev.rabbit.trackerbridge.START"
         const val ACTION_SCAN = "dev.rabbit.trackerbridge.SCAN"

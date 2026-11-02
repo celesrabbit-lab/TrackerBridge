@@ -11,6 +11,9 @@
     <string name="start_bridge">Start bridge</string>
     <string name="stop_bridge">Stop bridge</string>
     <string name="scan_cameras">Scan for cameras</string>
+    <string name="save_log">Save log</string>
+    <string name="log_saved">Log saved to the Download folder as %1$s. To send it, connect the headset to your PC with a USB cable (or use SideQuest) and copy it from Download.</string>
+    <string name="log_failed">Could not save the log: %1$s</string>
     <string name="language">Language</string>
     <string name="language_system">System default</string>
     <string name="empty_running">Plug the cameras into the Quest\'s hub. If a USB permission prompt appears, accept it (tick \"use by default\" so it doesn\'t ask again).</string>
@@ -22,7 +25,7 @@
     <string name="status_starting">● Starting</string>
     <string name="status_waiting">● Waiting for image</string>
     <string name="status_reconnecting">● Reconnecting: %1$s</string>
-    <string name="pc_connected">PC connected</string>
+    <string name="pc_connected">PC connected (%1$s)</string>
     <string name="pc_not_connected">PC not connected</string>
     <string name="port_error">Could not open port %1$d</string>
 

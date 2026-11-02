@@ -6,7 +6,6 @@ import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Process
-import android.util.Log
 import java.io.IOException
 
 /**
@@ -68,7 +67,7 @@ class SerialCamera(
                 if (openAndStream()) emptyCycles = 0 else emptyCycles++
             } catch (e: Exception) {
                 if (running) {
-                    Log.w(TAG, "${label()}: ${e.message}", e)
+                    AppLog.w(TAG, "${label()}: ${e.message}", e)
                     problem = (e as? CameraException)?.problem ?: CameraProblem.OTHER
                     diagnostics = e.message.orEmpty()
                     emptyCycles++
@@ -80,7 +79,7 @@ class SerialCamera(
             if (emptyCycles >= MAX_EMPTY_CYCLES) {
                 problem = CameraProblem.NOT_A_TRACKER
                 diagnostics = "no JPEG at ${UsbSerial.BAUD_RATES.joinToString("/")} baud"
-                Log.w(TAG, "${label()}: no video after trying every baud rate $emptyCycles times")
+                AppLog.w(TAG, "${label()}: no video after trying every baud rate $emptyCycles times")
                 break
             }
             state = CameraState.RETRYING
@@ -115,11 +114,11 @@ class SerialCamera(
                 val error = UsbSerial.configure(conn, port, baud)
                 if (error != null) {
                     lastError = "${port.kind.label} at $baud: $error"
-                    Log.w(TAG, "${label()}: $lastError")
+                    AppLog.w(TAG, "${label()}: $lastError")
                     continue
                 }
                 diagnostics = "${port.kind.label} · $baud baud"
-                Log.i(TAG, "${label()}: listening, $diagnostics")
+                AppLog.i(TAG, "${label()}: listening, $diagnostics")
                 if (stream(conn, port, endpoint, baud)) return true
                 if (!running) return false
             }
@@ -178,7 +177,7 @@ class SerialCamera(
             if (parser.validFrames == 0L) {
                 // Todavia sin imagen: quizas la velocidad esta mal, o la placa no es una camara
                 if (now - started > SYNC_NANOS) {
-                    Log.w(TAG, "${label()}: no JPEG at $baud baud (${parser.skippedBytes} bytes of noise)")
+                    AppLog.w(TAG, "${label()}: no JPEG at $baud baud (${parser.skippedBytes} bytes of noise)")
                     return false
                 }
             } else {
@@ -190,7 +189,7 @@ class SerialCamera(
                 }
             }
             if (now - windowStart >= STATS_NANOS) {
-                Log.i(TAG, "${label()}: serial: ${stats.summarize(now - windowStart)}")
+                AppLog.i(TAG, "${label()}: serial: ${stats.summarize(now - windowStart)}")
                 windowStart = now
             }
         }

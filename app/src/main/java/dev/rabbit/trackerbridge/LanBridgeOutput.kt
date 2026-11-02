@@ -3,7 +3,6 @@ package dev.rabbit.trackerbridge
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.os.Build
-import android.util.Log
 import dev.rabbit.trackerbridge.LanBridgeProtocol.Slot
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -59,7 +58,7 @@ class LanBridgeOutput(context: Context) {
         val s = try {
             openSocket()
         } catch (e: Exception) {
-            Log.w(TAG, "Could not open the LAN bridge socket", e)
+            AppLog.w(TAG, "Could not open the LAN bridge socket", e)
             return
         }
         socket = s
@@ -77,7 +76,7 @@ class LanBridgeOutput(context: Context) {
         for (slot in Slot.values()) {
             threads += thread(name = "lan-${slot.key}", isDaemon = true) { frameLoop(s, slot) }
         }
-        Log.i(TAG, "LAN bridge output started on port ${s.localPort} as ${identity.sourceId}")
+        AppLog.i(TAG, "LAN bridge output started on port ${s.localPort} as ${identity.sourceId}")
     }
 
     fun stop() {
@@ -90,7 +89,7 @@ class LanBridgeOutput(context: Context) {
         multicastLock = null
         pcAddress = null
         activeSlots = emptySet()
-        Log.i(TAG, "LAN bridge output stopped")
+        AppLog.i(TAG, "LAN bridge output stopped")
     }
 
     /**
@@ -105,7 +104,7 @@ class LanBridgeOutput(context: Context) {
             bind(InetSocketAddress(LanBridgeProtocol.PORT))
         }
     } catch (e: Exception) {
-        Log.i(TAG, "Port ${LanBridgeProtocol.PORT} busy, using any port: ${e.message}")
+        AppLog.i(TAG, "Port ${LanBridgeProtocol.PORT} busy, using any port: ${e.message}")
         DatagramSocket().apply { broadcast = true }
     }
 
@@ -122,7 +121,7 @@ class LanBridgeOutput(context: Context) {
             }
             when {
                 LanBridgeProtocol.isAck(buf, packet.length) -> {
-                    if (pcAddress != packet.address) Log.i(TAG, "PC app answered from ${packet.address.hostAddress}")
+                    if (pcAddress != packet.address) AppLog.i(TAG, "PC app answered from ${packet.address.hostAddress}")
                     pcAddress = packet.address
                     lastAckNanos = System.nanoTime()
                     state = State.CONNECTED
@@ -155,7 +154,7 @@ class LanBridgeOutput(context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                if (running) Log.w(TAG, "LAN bridge control send failed: ${e.message}")
+                if (running) AppLog.w(TAG, "LAN bridge control send failed: ${e.message}")
             }
             try {
                 Thread.sleep(1000)
@@ -190,7 +189,7 @@ class LanBridgeOutput(context: Context) {
             try {
                 send(s, packet, pc)
             } catch (e: Exception) {
-                if (running) Log.w(TAG, "LAN bridge frame send failed: ${e.message}")
+                if (running) AppLog.w(TAG, "LAN bridge frame send failed: ${e.message}")
             }
         }
     }

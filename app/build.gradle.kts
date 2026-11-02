@@ -41,15 +41,15 @@ android {
     productFlavors {
         create("quest") {
             dimension = "headset"
-            versionCode = 15
-            versionName = "0.10.0-beta.1"
+            versionCode = 16
+            versionName = "0.10.1-beta.1"
         }
         create("pico") {
             dimension = "headset"
             // App separada (dev.rabbit.trackerbridge.pico): se instala junto a la de Quest sin conflictos
             applicationIdSuffix = ".pico"
-            versionCode = 5
-            versionName = "0.5.0-beta.1"
+            versionCode = 6
+            versionName = "0.5.1-beta.1"
         }
     }
 
@@ -71,6 +71,11 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
+    }
+
+    // Los tests corren fuera de Android: android.util.Log no hace nada en lugar de fallar
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     compileOptions {

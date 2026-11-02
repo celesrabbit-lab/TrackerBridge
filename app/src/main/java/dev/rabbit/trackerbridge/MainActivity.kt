@@ -26,6 +26,7 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import java.util.Locale
+import kotlin.concurrent.thread
 
 /**
  * Pantalla liviana: solo nombres, direcciones y estado de cada camara. No muestra el video
@@ -356,7 +357,9 @@ class MainActivity : Activity() {
         // Webcams: modo USB o detalle del error, para que una captura de pantalla sirva de diagnostico
         val detail = cam?.diagnostics?.takeIf { it.isNotEmpty() } ?: cam?.resolution?.takeIf { it.isNotEmpty() }
         detail?.let { parts += it }
-        parts += getString(if (slot.server.clientCount == 0) R.string.pc_not_connected else R.string.pc_connected)
+        // La IP de la PC confirma que llego la app correcta (ETVR/Babble) y no otro aparato de la red
+        val pcs = slot.server.clientAddresses()
+        parts += if (pcs.isEmpty()) getString(R.string.pc_not_connected) else getString(R.string.pc_connected, pcs.joinToString(", "))
         if (slot.serverFailed) parts += getString(R.string.port_error, slot.port)
         return parts.joinToString("  ·  ")
     }
@@ -378,6 +381,18 @@ class MainActivity : Activity() {
             CameraProblem.OTHER, null -> R.string.problem_other
         }
     )
+
+    /** Archivo de texto en Descargas para mandar cuando algo falla; se arma fuera de la pantalla. */
+    private fun saveDiagnosticLog() {
+        val app = applicationContext
+        thread(name = "save-log") {
+            Bridge.message = try {
+                UiMessage(R.string.log_saved, DiagnosticLog.save(app))
+            } catch (e: Exception) {
+                UiMessage(R.string.log_failed, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
 
     /** Idioma de la app, independiente del Quest: sistema, English o Español (Android 13+). */
     private fun showLanguagePicker() {
@@ -403,18 +418,27 @@ class MainActivity : Activity() {
             setPadding(dp(24), dp(20), dp(24), dp(20))
             setBackgroundColor(BACKGROUND)
         }
-        root.addView(text(getString(R.string.app_name), 28f, bold = true))
-        root.addView(text(getString(R.string.subtitle), 16f, SUBTLE))
+        // El nombre de la app ya va en la barra de la ventana: aca se empieza por lo que importa
+        root.addView(text(getString(R.string.subtitle), 15f, SUBTLE))
         ipText = text("", 20f).also {
-            it.setPadding(0, dp(12), 0, dp(4))
+            it.setPadding(0, dp(8), 0, dp(2))
             root.addView(it)
         }
         root.addView(text(getString(R.string.pc_hint), 15f, SUBTLE))
-
-        val buttons = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(12), 0, dp(8))
+        messageText = text("", 16f, YELLOW).also {
+            it.setPadding(0, dp(8), 0, 0)
+            root.addView(it)
         }
+
+        // Las camaras van arriba: es lo que se viene a mirar
+        emptyText = text("", 17f, SUBTLE).also {
+            it.setPadding(0, dp(16), 0, 0)
+            root.addView(it)
+        }
+        cardsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(cardsContainer)
+
+        // La ventana del Quest es angosta: los botones van de a dos por fila y se reparten el ancho
         toggleButton = Button(this).apply {
             setOnClickListener {
                 if (Bridge.serviceRunning) {
@@ -424,18 +448,24 @@ class MainActivity : Activity() {
                 }
             }
         }
-        buttons.addView(toggleButton)
-        buttons.addView(Button(this).apply {
+        val scanButton = Button(this).apply {
             setText(R.string.scan_cameras)
             setOnClickListener { if (hasCameraPermission()) startBridge(BridgeService.ACTION_SCAN) else ensurePermissionsAndStart() }
-        })
-        if (Build.VERSION.SDK_INT >= 33) {
-            buttons.addView(Button(this).apply {
+        }
+        val logButton = Button(this).apply {
+            setText(R.string.save_log)
+            setOnClickListener { saveDiagnosticLog() }
+        }
+        val languageButton = if (Build.VERSION.SDK_INT >= 33) {
+            Button(this).apply {
                 text = "${getString(R.string.language)} / Language"
                 setOnClickListener { showLanguagePicker() }
-            })
+            }
+        } else {
+            null
         }
-        root.addView(buttons)
+        root.addView(buttonRow(toggleButton, scanButton).apply { setPadding(0, dp(16), 0, 0) })
+        root.addView(buttonRow(logButton, languageButton).apply { setPadding(0, 0, 0, dp(8)) })
 
         // Solo en los visores donde abrirse al conectar una camara interrumpe el juego (Pico)
         if (resources.getBoolean(R.bool.auto_open_toggle_visible)) {
@@ -467,16 +497,6 @@ class MainActivity : Activity() {
             root.addView(it)
         }
 
-        messageText = text("", 16f, YELLOW).also {
-            it.setPadding(0, dp(4), 0, dp(8))
-            root.addView(it)
-        }
-        emptyText = text("", 17f, SUBTLE).also {
-            it.setPadding(0, dp(16), 0, 0)
-            root.addView(it)
-        }
-        cardsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(cardsContainer)
         usbText = text("", 14f, SUBTLE).also {
             it.setPadding(0, dp(16), 0, 0)
             it.visibility = View.GONE
@@ -517,6 +537,15 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(12) })
         return CardViews(title, url, status, resolution, fps)
+    }
+
+    /** Fila de botones del mismo ancho; si falta uno, el otro ocupa su mitad igual. */
+    private fun buttonRow(vararg buttons: Button?): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        buttons.forEach {
+            if (it != null) addView(it, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        weightSum = buttons.size.toFloat()
     }
 
     private fun text(value: String, sizeSp: Float, color: Int = Color.WHITE, bold: Boolean = false) =

@@ -2,7 +2,6 @@ package dev.rabbit.trackerbridge
 
 import android.os.ParcelFileDescriptor
 import android.system.Os
-import android.util.Log
 import java.io.BufferedOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -10,6 +9,7 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.Locale
 import java.util.concurrent.CopyOnWriteArraySet
 import kotlin.concurrent.thread
 
@@ -23,6 +23,10 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
     private val clients = CopyOnWriteArraySet<Socket>()
 
     val clientCount: Int get() = clients.size
+
+    /** IP de las PCs conectadas ahora, para la pantalla. */
+    fun clientAddresses(): List<String> =
+        clients.mapNotNull { it.inetAddress?.hostAddress }.distinct()
     val isRunning: Boolean get() = running
 
     fun start() {
@@ -61,6 +65,11 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
 
     private fun handle(socket: Socket) {
         clients += socket
+        // Cada conexion queda en el registro: con eso se ve si la PC llega al visor y por que se corta
+        val pc = socket.inetAddress?.hostAddress ?: "?"
+        val since = System.nanoTime()
+        val sent = LongArray(1)
+        var reason = "closed"
         try {
             socket.tcpNoDelay = true
             // Marca los paquetes como trafico de voz (WMM): el WiFi los prioriza frente a otros datos
@@ -77,19 +86,24 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
                 if (header.isEmpty()) break
             }
             val path = requestLine.split(' ').getOrNull(1) ?: "/"
+            AppLog.i(TAG, "PC $pc connected to port $port: $requestLine")
             val out = BufferedOutputStream(socket.getOutputStream(), 16 * 1024)
 
             when {
                 path.startsWith("/favicon") -> sendText(out, 404, "Not Found", "")
                 path.startsWith("/snapshot") || path.startsWith("/capture") || path.startsWith("/jpg") -> sendSnapshot(out)
                 path.startsWith("/control") -> sendText(out, 200, "OK", "")
-                else -> sendStream(socket, out)
+                else -> sendStream(socket, out, sent)
             }
-        } catch (_: IOException) {
+        } catch (e: IOException) {
             // cliente desconectado
+            reason = e.message ?: e.javaClass.simpleName
         } catch (e: Exception) {
-            Log.w(TAG, "Error en cliente del puerto $port", e)
+            reason = e.toString()
+            AppLog.w(TAG, "Error en cliente del puerto $port", e)
         } finally {
+            val seconds = (System.nanoTime() - since) / 1e9
+            AppLog.i(TAG, "PC $pc left port $port after %.1f s, ${sent[0]} frames sent ($reason)".format(Locale.ROOT, seconds))
             clients -= socket
             try {
                 socket.close()
@@ -98,7 +112,7 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
         }
     }
 
-    private fun sendStream(socket: Socket, out: OutputStream) {
+    private fun sendStream(socket: Socket, out: OutputStream, sent: LongArray) {
         out.write(
             ("HTTP/1.1 200 OK\r\n" +
                 "Content-Type: multipart/x-mixed-replace;boundary=$BOUNDARY\r\n" +
@@ -125,6 +139,7 @@ class MjpegServer(val port: Int, private val frames: FrameBuffer) {
             out.write(PART_SUFFIX)
             out.write(frame.data)
             out.flush()
+            sent[0]++
         }
     }
 

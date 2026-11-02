@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.util.Log
 
 /**
  * Recibe el aviso de "camara USB conectada" sin mostrar nada: despierta al servicio y se cierra.
@@ -34,13 +33,13 @@ class UsbAttachActivity : Activity() {
             startForegroundService(intent)
             return
         } catch (e: Exception) {
-            Log.w(TAG, "Could not start the service from the USB event", e)
+            AppLog.w(TAG, "Could not start the service from the USB event", e)
         }
         try {
             startService(intent)
             return
         } catch (e: Exception) {
-            Log.w(TAG, "Could not wake the service either", e)
+            AppLog.w(TAG, "Could not wake the service either", e)
         }
         openApp()
     }
@@ -49,7 +48,7 @@ class UsbAttachActivity : Activity() {
         try {
             startActivity(Intent(this, MainActivity::class.java))
         } catch (e: Exception) {
-            Log.w(TAG, "Could not open the app", e)
+            AppLog.w(TAG, "Could not open the app", e)
         }
     }
 

@@ -7,6 +7,7 @@ import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -25,6 +26,17 @@ fun UsbDevice.interfaceSummary(): String =
         val i = getInterface(it)
         "${i.id}/${i.alternateSetting} c${i.interfaceClass}.${i.interfaceSubclass}"
     }.ifEmpty { "none" }
+
+/**
+ * Numero de serie que identifica a la placa en todas sus fases. Al arrancar, un ESP32-S3 aparece unos
+ * segundos como "USB JTAG/serial debug unit" con la MAC separada por dos puntos (A4:CB:8F:B8:87:28);
+ * despues, el firmware de la camara usa la misma MAC sin separar (A4CB8FB88728). Asi las dos fases
+ * comparten tarjeta y puerto, en lugar de que la de arranque se quede con el puerto de la camara.
+ */
+fun stableSerial(serial: String): String =
+    if (MAC_WITH_COLONS.matches(serial)) serial.replace(":", "").uppercase(Locale.ROOT) else serial
+
+private val MAC_WITH_COLONS = Regex("[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}")
 
 /** Mensaje para la pantalla: guarda el texto como recurso y se traduce al mostrarse. */
 class UiMessage(val res: Int, vararg val args: Any)
